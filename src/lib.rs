@@ -1,5 +1,7 @@
 pub mod handler;
 
+use http::{Request, Response};
+
 use crate::handler::BasicHandler;
 
 use std::collections::BTreeMap;
@@ -7,7 +9,39 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 pub struct Params(BTreeMap<String, String>);
 
-pub struct App {
+impl Default for Params {
+    fn default() -> Self {
+        Self(BTreeMap::default())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Error(String);
+
+impl Default for Error {
+    fn default() -> Self {
+        Self(String::from("internal server error"))
+    }
+}
+
+impl Error {
+    pub fn new<T>(message: T) -> Self
+    where
+        T: ToString,
+    {
+        Self(message.to_string())
+    }
+}
+
+impl From<http::Error> for Error {
+    fn from(e: http::Error) -> Self {
+        Self::new(e)
+    }
+}
+
+pub type HTTPResult<'a, Req, Resp> = Result<(&'a Request<Req>, Option<&'a Response<Resp>>), Error>;
+
+pub struct App<'a> {
     #[allow(dead_code)] // FIXME remove
-    routes: BTreeMap<String, BasicHandler<hyper::Body, hyper::Body>>,
+    routes: BTreeMap<String, &'a BasicHandler<'static, hyper::Body, hyper::Body>>,
 }

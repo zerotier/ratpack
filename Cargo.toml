@@ -9,3 +9,4 @@ edition = "2021"
 hyper = { version = "*", features = [ "http1", "http2", "server", "runtime", "tcp", "stream" ] }
 http = "*"
 async-trait = "*"
+tokio = { version = "*", features = [ "full" ] }
