@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 hyper = { version = "*", features = [ "http1", "http2", "server", "runtime", "tcp", "stream" ] }
 http = "*"
+async-trait = "*"
