@@ -6,6 +6,7 @@ use crate::Error;
 pub enum RoutePart {
     PathComponent(&'static str),
     Param(&'static str),
+    Leader,
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +20,7 @@ impl Path {
             if arg.starts_with(":") {
                 // is param
                 parts.push(RoutePart::Param(arg.trim_start_matches(":")));
+            } else if arg == "" { // skip empties
             } else {
                 // is not param
                 parts.push(RoutePart::PathComponent(arg));
@@ -68,6 +70,7 @@ impl Path {
 
                     None
                 }
+                RoutePart::Leader => None,
             };
 
             i += 1
@@ -77,24 +80,27 @@ impl Path {
     }
 
     pub(crate) fn matches(&self, path: &'static str) -> bool {
-        let parts = path.split("/");
+        let parts: Vec<&str> = path.split("/").collect();
 
-        if parts.clone().count() != self.0.len() {
+        if parts.len() != self.0.len() {
             return false;
         }
 
         let mut i = 0;
         for arg in parts {
-            let res = match self.0[i] {
-                RoutePart::PathComponent(pc) => pc == arg,
-                RoutePart::Param(_param) => {
-                    // FIXME advanced parameter shit here later
-                    true
-                }
-            };
+            if arg != "" {
+                let res = match self.0[i] {
+                    RoutePart::PathComponent(pc) => pc == arg,
+                    RoutePart::Param(_param) => {
+                        // FIXME advanced parameter shit here later
+                        true
+                    }
+                    RoutePart::Leader => true,
+                };
 
-            if !res {
-                return res;
+                if !res {
+                    return res;
+                }
             }
 
             i += 1;
@@ -106,7 +112,7 @@ impl Path {
 
 impl Default for Path {
     fn default() -> Self {
-        Self(Vec::new())
+        Self(vec![RoutePart::Leader])
     }
 }
 
@@ -120,10 +126,11 @@ impl ToString for Path {
                 RoutePart::Param(param) => {
                     format!(":{}", param)
                 }
+                RoutePart::Leader => "".to_string(),
             });
         }
 
-        if s.len() == 0 {
+        if s.len() < 2 {
             return "/".to_string();
         }
 
@@ -140,7 +147,7 @@ mod tests {
         let path = Path::new("/abc/def/ghi");
         assert!(path.matches("/abc/def/ghi"));
         assert!(!path.matches("//abc/def/ghi"));
-        assert!(!path.matches("//def/ghi"));
+        assert!(!path.matches("/def/ghi"));
         assert!(path.params().is_empty());
 
         let path = Path::new("/abc/:def/:ghi/jkl");
@@ -164,6 +171,6 @@ mod tests {
             "/abc/:wooble/:wakka/jkl".to_string()
         );
 
-        assert_eq!(Path::default().to_string(), "/".to_string())
+        assert_eq!(Path::default().to_string(), "/".to_string());
     }
 }
