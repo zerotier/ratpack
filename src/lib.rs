@@ -39,9 +39,9 @@ impl From<http::Error> for Error {
     }
 }
 
-pub type HTTPResult<'a, Req, Resp> = Result<(&'a Request<Req>, Option<&'a Response<Resp>>), Error>;
+pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>>), Error>;
 
-pub struct App<'a> {
+pub struct App {
     #[allow(dead_code)] // FIXME remove
-    routes: BTreeMap<String, &'a BasicHandler<'static, hyper::Body, hyper::Body>>,
+    routes: Vec<&'static BasicHandler>,
 }

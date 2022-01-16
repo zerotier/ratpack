@@ -1,66 +1,61 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::{HTTPResult, Params};
 
 use async_trait::async_trait;
 use http::{Request, Response};
 
-pub type HandlerFunc<'a, T, R> =
-    dyn Fn(&'a Request<T>, Params, Option<&'a Response<R>>) -> HTTPResult<'a, T, R>;
+pub type HandlerFunc =
+    dyn Fn(Request<hyper::Body>, Params, Option<Response<hyper::Body>>) -> HTTPResult + Sync;
 
 #[async_trait]
-pub trait Handler<'a, 'b, T, R>
+pub trait Handler
 where
-    Self: Send + Sync + 'b,
+    Self: Sync + Sized,
 {
-    async fn perform(&'b self, response: Option<&'a Response<R>>) -> HTTPResult<'a, T, R>;
+    async fn perform(
+        &self,
+        req: Request<hyper::Body>,
+        response: Option<Response<hyper::Body>>,
+    ) -> HTTPResult;
 }
 
-pub struct BasicHandler<'a, T, R>
+#[derive(Clone)]
+pub struct BasicHandler
 where
-    T: Send + Sync + 'a,
-    R: Send + Sync + 'a,
+    Self: Sync + Sized,
 {
-    req: Arc<Mutex<Request<T>>>,
     params: Params,
-    next: Option<&'a BasicHandler<'a, T, R>>,
-    func: &'a HandlerFunc<'a, T, R>,
+    next: Option<Arc<BasicHandler>>,
+    func: &'static HandlerFunc,
 }
 
-impl<'a, 'b, T, R> BasicHandler<'b, T, R>
+impl BasicHandler
 where
-    T: Send + Sync + 'b,
-    R: Send + Sync + 'b,
+    Self: Sync + Sized,
 {
     pub fn new(
-        req: Request<T>,
         params: Params,
-        next: Option<&'b BasicHandler<'b, T, R>>,
-        func: &'static HandlerFunc<'b, T, R>,
+        next: Option<Arc<BasicHandler>>,
+        func: &'static HandlerFunc,
     ) -> Self {
-        Self {
-            req: Arc::new(Mutex::new(req)),
-            params,
-            next,
-            func,
-        }
+        Self { params, next, func }
     }
 }
 
 #[async_trait]
-impl<'a, 'b, T, R> Handler<'a, 'b, T, R> for BasicHandler<'b, T, R>
+impl Handler for BasicHandler
 where
-    Self: Send + Sync + 'b,
-    R: Copy + Send + Sync + Sized + 'static,
-    T: Copy + Send + Sync + Sized + 'static,
+    Self: Sync + Sized,
 {
-    async fn perform(&'b self, response: Option<&'a Response<R>>) -> HTTPResult<'a, T, R> {
-        let mut req = self.req.lock().await;
-
-        let (req, response) = (*self.func)(&mut req, self.params, response)?;
+    async fn perform(
+        &self,
+        req: Request<hyper::Body>,
+        response: Option<Response<hyper::Body>>,
+    ) -> HTTPResult {
+        let (req, response) = (*self.func)(req, self.params.clone(), response)?;
         if self.next.is_some() {
-            return Ok(self.next.unwrap().perform(response).await?);
+            return Ok(self.next.clone().unwrap().perform(req, response).await?);
         }
 
         Ok((req, response))
@@ -72,44 +67,76 @@ mod tests {
     use http::{HeaderValue, Request, Response, StatusCode};
     use hyper::Body;
 
-    fn one<'a>(
-        mut req: &'a Request<Body>,
+    // this method adds a header:
+    // wakka: wakka wakka
+    // to the request. that's it!
+    #[allow(dead_code)]
+    fn one(
+        mut req: Request<Body>,
         _params: Params,
-        _response: Option<&'a Response<Body>>,
-    ) -> HTTPResult<'a, Body, Body> {
+        _response: Option<Response<Body>>,
+    ) -> HTTPResult {
         let headers = req.headers_mut();
         headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
-        Ok((&req, None))
+        Ok((req, None))
     }
 
-    fn two<'a>(
-        mut req: &'a Request<Body>,
+    // this method returns an OK status when the wakka header exists.
+    #[allow(dead_code)]
+    fn two(
+        req: Request<Body>,
         _params: Params,
-        response: Option<&'a Response<Body>>,
-    ) -> HTTPResult<'a, Body, Body> {
+        mut response: Option<Response<Body>>,
+    ) -> HTTPResult {
         if let Some(header) = req.headers().get("wakka") {
             if header != "wakka wakka" {
                 return Err(Error::new("invalid header value"));
             }
 
             if response.is_some() {
-                return Ok((&req, response));
+                return Ok((req, response));
             } else {
-                response.replace(
-                    &Response::builder()
-                        .status(StatusCode::OK)
-                        .body(Body::default())?,
-                );
+                let resp = Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Body::default())?;
+                response.replace(resp);
 
-                return Ok((&req, response));
+                return Ok((req, response));
             }
         }
 
         Err(Error::default())
     }
 
-    #[test]
-    fn test_handler_basic() {
-        let bh = super::BasicHandler::new(Request::default(), Params::default(), None, &one);
+    // orchestration!!!!
+    #[tokio::test]
+    async fn test_handler_basic() {
+        use super::Handler;
+        use std::sync::Arc;
+
+        // single stage handler that never yields a response
+        let bh = super::BasicHandler::new(Params::default(), None, &one);
+        let req = Request::default();
+        let (req, response) = bh.perform(req, None).await.unwrap();
+        if !req.headers().get("wakka").is_some() {
+            panic!("no wakkas")
+        }
+
+        if response.is_some() {
+            panic!("response should be none at this point")
+        }
+
+        // two-stage handler; yields a response if the first one was good.
+        let bh_two = super::BasicHandler::new(Params::default(), None, &two);
+        let bh = super::BasicHandler::new(Params::default(), Some(Arc::new(bh_two.clone())), &one);
+        let (_, response) = bh.perform(req, None).await.unwrap();
+
+        if !(response.is_some() && response.unwrap().status() == StatusCode::OK) {
+            panic!("response not ok")
+        }
+
+        if !bh_two.perform(Request::default(), None).await.is_err() {
+            panic!("no error")
+        }
     }
 }
