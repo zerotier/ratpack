@@ -1,19 +1,12 @@
 pub mod handler;
+pub mod path;
+//pub mod router;
 
 use http::{Request, Response};
 
 use crate::handler::BasicHandler;
 
 use std::collections::BTreeMap;
-
-#[derive(Debug, Clone)]
-pub struct Params(BTreeMap<String, String>);
-
-impl Default for Params {
-    fn default() -> Self {
-        Self(BTreeMap::default())
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct Error(String);
@@ -43,5 +36,5 @@ pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>
 
 pub struct App {
     #[allow(dead_code)] // FIXME remove
-    routes: Vec<&'static BasicHandler>,
+    routes: BTreeMap<String, &'static BasicHandler>,
 }
