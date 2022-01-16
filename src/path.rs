@@ -28,12 +28,12 @@ impl Path {
         parts
     }
 
-    fn push(&mut self, arg: RoutePart) -> Self {
+    pub(crate) fn push(&mut self, arg: RoutePart) -> Self {
         self.0.push(arg);
         self.clone()
     }
 
-    fn params(&self) -> Vec<&str> {
+    pub(crate) fn params(&self) -> Vec<&str> {
         let mut params = Vec::new();
         for arg in self.0.clone() {
             match arg {
@@ -45,7 +45,10 @@ impl Path {
         params
     }
 
-    fn extract(&self, provided: &'static str) -> Result<BTreeMap<&'static str, &str>, Error> {
+    pub(crate) fn extract(
+        &self,
+        provided: &'static str,
+    ) -> Result<BTreeMap<&'static str, &str>, Error> {
         let parts: Vec<&str> = provided.split("/").collect();
         let mut params = BTreeMap::new();
 
@@ -73,7 +76,7 @@ impl Path {
         Ok(params)
     }
 
-    fn matches(&self, path: &'static str) -> bool {
+    pub(crate) fn matches(&self, path: &'static str) -> bool {
         let parts = path.split("/");
 
         if parts.clone().count() != self.0.len() {
@@ -120,6 +123,10 @@ impl ToString for Path {
             });
         }
 
+        if s.len() == 0 {
+            return "/".to_string();
+        }
+
         s.join("/")
     }
 }
@@ -151,5 +158,12 @@ mod tests {
         assert_eq!(path.extract("/abc/wooble/wakka/jkl").unwrap(), bt);
         assert!(path.extract("/wooble/wakka/jkl").is_err());
         assert!(path.extract("/def/wooble/wakka/jkl").is_err());
+
+        assert_eq!(
+            Path::new("/abc/:wooble/:wakka/jkl").to_string(),
+            "/abc/:wooble/:wakka/jkl".to_string()
+        );
+
+        assert_eq!(Path::default().to_string(), "/".to_string())
     }
 }
