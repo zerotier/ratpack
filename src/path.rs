@@ -1,16 +1,28 @@
-use std::collections::BTreeMap;
+use crate::{handler::Params, Error};
 
-use crate::Error;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum RoutePart {
     PathComponent(&'static str),
     Param(&'static str),
     Leader,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd)]
 pub struct Path(Vec<RoutePart>);
+
+impl PartialEq for Path {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string() == other.to_string()
+    }
+}
+
+impl Eq for Path {}
+
+impl Ord for Path {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.to_string().cmp(&other.to_string())
+    }
+}
 
 impl Path {
     pub(crate) fn new(path: &'static str) -> Self {
@@ -47,12 +59,9 @@ impl Path {
         params
     }
 
-    pub(crate) fn extract(
-        &self,
-        provided: &'static str,
-    ) -> Result<BTreeMap<&'static str, &str>, Error> {
+    pub(crate) fn extract(&self, provided: &'static str) -> Result<Params, Error> {
         let parts: Vec<&str> = provided.split("/").collect();
-        let mut params = BTreeMap::new();
+        let mut params = Params::default();
 
         if parts.len() != self.0.len() {
             return Err(Error::new("invalid parameters"));

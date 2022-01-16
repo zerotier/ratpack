@@ -5,17 +5,10 @@ use crate::HTTPResult;
 use async_trait::async_trait;
 use http::{Request, Response};
 
-#[derive(Debug, Clone)]
-pub struct Params(BTreeMap<String, String>);
-
-impl Default for Params {
-    fn default() -> Self {
-        Self(BTreeMap::default())
-    }
-}
+pub(crate) type Params = BTreeMap<&'static str, &'static str>;
 
 pub type HandlerFunc =
-    dyn Fn(Request<hyper::Body>, Params, Option<Response<hyper::Body>>) -> HTTPResult + Sync;
+    dyn Fn(Request<hyper::Body>, Option<Response<hyper::Body>>, Params) -> HTTPResult + Sync;
 
 #[async_trait]
 pub trait Handler
@@ -26,6 +19,7 @@ where
         &self,
         req: Request<hyper::Body>,
         response: Option<Response<hyper::Body>>,
+        params: Params,
     ) -> HTTPResult;
 }
 
@@ -34,7 +28,6 @@ pub struct BasicHandler
 where
     Self: Sync + Sized,
 {
-    params: Params,
     next: Option<Arc<BasicHandler>>,
     func: &'static HandlerFunc,
 }
@@ -43,12 +36,8 @@ impl BasicHandler
 where
     Self: Sync + Sized,
 {
-    pub fn new(
-        params: Params,
-        next: Option<Arc<BasicHandler>>,
-        func: &'static HandlerFunc,
-    ) -> Self {
-        Self { params, next, func }
+    pub fn new(next: Option<Arc<BasicHandler>>, func: &'static HandlerFunc) -> Self {
+        Self { next, func }
     }
 }
 
@@ -61,10 +50,16 @@ where
         &self,
         req: Request<hyper::Body>,
         response: Option<Response<hyper::Body>>,
+        params: Params,
     ) -> HTTPResult {
-        let (req, response) = (*self.func)(req, self.params.clone(), response)?;
+        let (req, response) = (*self.func)(req, response, params.clone())?;
         if self.next.is_some() {
-            return Ok(self.next.clone().unwrap().perform(req, response).await?);
+            return Ok(self
+                .next
+                .clone()
+                .unwrap()
+                .perform(req, response, params)
+                .await?);
         }
 
         Ok((req, response))
@@ -84,8 +79,8 @@ mod tests {
     #[allow(dead_code)]
     fn one(
         mut req: Request<Body>,
-        _params: Params,
         _response: Option<Response<Body>>,
+        _params: Params,
     ) -> HTTPResult {
         let headers = req.headers_mut();
         headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
@@ -96,8 +91,8 @@ mod tests {
     #[allow(dead_code)]
     fn two(
         req: Request<Body>,
-        _params: Params,
         mut response: Option<Response<Body>>,
+        _params: Params,
     ) -> HTTPResult {
         if let Some(header) = req.headers().get("wakka") {
             if header != "wakka wakka" {
@@ -126,9 +121,9 @@ mod tests {
         use std::sync::Arc;
 
         // single stage handler that never yields a response
-        let bh = super::BasicHandler::new(Params::default(), None, &one);
+        let bh = super::BasicHandler::new(None, &one);
         let req = Request::default();
-        let (req, response) = bh.perform(req, None).await.unwrap();
+        let (req, response) = bh.perform(req, None, Params::new()).await.unwrap();
         if !req.headers().get("wakka").is_some() {
             panic!("no wakkas")
         }
@@ -138,15 +133,19 @@ mod tests {
         }
 
         // two-stage handler; yields a response if the first one was good.
-        let bh_two = super::BasicHandler::new(Params::default(), None, &two);
-        let bh = super::BasicHandler::new(Params::default(), Some(Arc::new(bh_two.clone())), &one);
-        let (_, response) = bh.perform(req, None).await.unwrap();
+        let bh_two = super::BasicHandler::new(None, &two);
+        let bh = super::BasicHandler::new(Some(Arc::new(bh_two.clone())), &one);
+        let (_, response) = bh.perform(req, None, Params::new()).await.unwrap();
 
         if !(response.is_some() && response.unwrap().status() == StatusCode::OK) {
             panic!("response not ok")
         }
 
-        if !bh_two.perform(Request::default(), None).await.is_err() {
+        if !bh_two
+            .perform(Request::default(), None, Params::new())
+            .await
+            .is_err()
+        {
             panic!("no error")
         }
     }

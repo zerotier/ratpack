@@ -1,6 +1,6 @@
 pub mod handler;
 pub mod path;
-//pub mod router;
+pub mod router;
 
 use http::{Request, Response};
 
