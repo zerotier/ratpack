@@ -105,6 +105,7 @@ mod tests {
         let bh = super::Handler::new(|req, resp, params| Box::pin(one(req, resp, params)), None);
         let req = Request::default();
         let (req, response) = bh.perform(req, None, Params::new()).await.unwrap();
+
         assert!(req.headers().get("wakka").is_some());
         assert!(response.is_none());
 
