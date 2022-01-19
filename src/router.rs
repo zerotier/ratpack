@@ -44,6 +44,11 @@ impl Route {
     #[allow(dead_code)]
     async fn dispatch(&self, provided: &'static str, req: Request<hyper::Body>) -> HTTPResult {
         let params = self.path.extract(provided)?;
+
+        if self.method != req.method() {
+            return Err(Error(http::StatusCode::NOT_FOUND.to_string()));
+        }
+
         self.handler.perform(req, None, params).await
     }
 }
@@ -112,6 +117,16 @@ mod tests {
         );
 
         assert!(route.dispatch("/a", Request::default()).await.is_err());
+        assert!(route
+            .dispatch(
+                "/a/b/c",
+                Request::builder()
+                    .method(Method::POST)
+                    .body(Body::from("one=two".as_bytes()))
+                    .unwrap(),
+            )
+            .await
+            .is_err());
 
         assert!(route.dispatch("/a/b/c", Request::default()).await.is_ok());
 
