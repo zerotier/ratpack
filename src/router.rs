@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use http::Request;
 
 use crate::{handler::Handler, path::Path, Error, HTTPResult};
@@ -13,9 +11,7 @@ pub struct Route {
 
 impl PartialEq for Route {
     fn eq(&self, other: &Self) -> bool {
-        let left = self.method.to_string() + " " + &self.path.to_string();
-        let right = other.method.to_string() + " " + &other.path.to_string();
-        left == right
+        self.method.to_string() == other.method.to_string() && self.path.eq(&other.path)
     }
 }
 
@@ -53,15 +49,15 @@ impl Route {
 }
 
 #[derive(Clone)]
-pub struct Router(BTreeSet<Route>);
+pub struct Router(Vec<Route>);
 
 impl Router {
     pub fn new() -> Self {
-        Self(BTreeSet::new())
+        Self(Vec::new())
     }
 
     pub fn add(&mut self, method: http::Method, path: &'static str, ch: Handler) -> Self {
-        self.0.insert(Route::new(method, path, ch));
+        self.0.push(Route::new(method, path, ch));
         self.clone()
     }
 
@@ -76,4 +72,72 @@ impl Router {
 
         Err(Error::new("no route found for request"))
     }
+}
+
+mod tests {
+    use http::{Request, Response};
+    use hyper::Body;
+
+    use crate::{handler::Params, HTTPResult};
+
+    #[allow(dead_code)]
+    async fn handler_one(
+        req: Request<Body>,
+        _response: Option<Response<Body>>,
+        _params: Params,
+    ) -> HTTPResult {
+        return Ok((
+            req,
+            Some(
+                Response::builder()
+                    .status(400)
+                    .body(Body::from("hello, world".as_bytes()))?,
+            ),
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_route_static() {
+        use super::Route;
+        use crate::handler::Handler;
+        use http::Method;
+
+        let route = Route::new(
+            Method::GET,
+            "/a/b/c",
+            Handler::new(
+                |req, resp, params| Box::pin(handler_one(req, resp, params)),
+                None,
+            ),
+        );
+
+        assert!(route.dispatch("/a/b/c", Request::default()).await.is_ok());
+
+        let body = hyper::body::to_bytes(
+            route
+                .dispatch("/a/b/c", Request::default())
+                .await
+                .unwrap()
+                .1
+                .unwrap()
+                .body_mut(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(body, "hello, world".as_bytes());
+
+        let status = route
+            .dispatch("/a/b/c", Request::default())
+            .await
+            .unwrap()
+            .1
+            .unwrap()
+            .status();
+
+        assert_eq!(status, 400);
+    }
+
+    #[tokio::test]
+    async fn test_router() {}
 }
