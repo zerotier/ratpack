@@ -176,6 +176,7 @@ mod tests {
         assert!(path.matches("/abc/wooble/wakka/jkl"));
         assert!(!path.matches("/nope/ghi/def/jkl"));
         assert!(!path.matches("/abc/ghi/def/nope"));
+        assert_eq!(path.params().len(), 2);
 
         let mut bt = BTreeMap::new();
         bt.insert("def", "wooble");
