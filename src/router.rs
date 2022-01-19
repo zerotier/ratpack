@@ -146,7 +146,9 @@ mod tests {
             .await
             .is_err());
 
-        for name in vec!["erik", "adam", "sean", "travis", "joseph", "grant"] {
+        for name in vec![
+            "erik", "adam", "sean", "travis", "joseph", "grant", "joy", "steve", "marc",
+        ] {
             assert!(route
                 .dispatch("/a/:name/c".to_string(), Request::default())
                 .await
