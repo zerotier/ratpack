@@ -47,6 +47,7 @@ impl Path {
         self.clone()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn params(&self) -> Vec<&str> {
         let mut params = Vec::new();
         for arg in self.0.clone() {
@@ -59,6 +60,7 @@ impl Path {
         params
     }
 
+    #[allow(dead_code)]
     pub(crate) fn extract(&self, provided: &'static str) -> Result<Params, Error> {
         let parts: Vec<&str> = provided.split("/").collect();
         let mut params = Params::default();

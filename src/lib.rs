@@ -2,11 +2,12 @@ pub mod handler;
 pub mod path;
 pub mod router;
 
+use handler::Handler;
 use http::{Request, Response};
 
-use crate::handler::BasicHandler;
+use std::{collections::BTreeMap, pin::Pin};
 
-use std::collections::BTreeMap;
+pub(crate) type PinBox<F> = Pin<Box<F>>;
 
 #[derive(Clone, Debug)]
 pub struct Error(String);
@@ -36,5 +37,5 @@ pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>
 
 pub struct App {
     #[allow(dead_code)] // FIXME remove
-    routes: BTreeMap<String, &'static BasicHandler>,
+    routes: BTreeMap<String, Handler>,
 }

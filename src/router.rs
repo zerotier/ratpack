@@ -1,18 +1,14 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 use http::Request;
 
-use crate::{
-    handler::{BasicHandler, Handler},
-    path::Path,
-    Error, HTTPResult,
-};
+use crate::{handler::Handler, path::Path, Error, HTTPResult};
 
 #[derive(Clone)]
 pub struct Route {
     method: http::Method,
     path: Path,
-    handler: BasicHandler,
+    handler: Handler,
 }
 
 impl PartialEq for Route {
@@ -41,7 +37,7 @@ impl Ord for Route {
 }
 
 impl Route {
-    fn new(method: http::Method, path: &'static str, handler: BasicHandler) -> Self {
+    fn new(method: http::Method, path: &'static str, handler: Handler) -> Self {
         Self {
             method,
             handler,
@@ -49,6 +45,7 @@ impl Route {
         }
     }
 
+    #[allow(dead_code)]
     async fn dispatch(&self, provided: &'static str, req: Request<hyper::Body>) -> HTTPResult {
         let params = self.path.extract(provided)?;
         self.handler.perform(req, None, params).await
@@ -63,12 +60,12 @@ impl Router {
         Self(BTreeSet::new())
     }
 
-    pub fn add(&mut self, method: http::Method, path: &'static str, bh: BasicHandler) -> Self {
-        self.0.insert(Route::new(method, path, bh));
+    pub fn add(&mut self, method: http::Method, path: &'static str, ch: Handler) -> Self {
+        self.0.insert(Route::new(method, path, ch));
         self.clone()
     }
 
-    pub fn find(&self, req: &'static Request<hyper::Body>) -> Result<BasicHandler, Error> {
+    pub fn find(&self, req: &'static Request<hyper::Body>) -> Result<Handler, Error> {
         let path = req.uri().path();
 
         for route_path in self.0.clone() {

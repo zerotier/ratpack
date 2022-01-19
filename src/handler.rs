@@ -1,62 +1,46 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, future::Future};
 
-use crate::HTTPResult;
+use crate::{HTTPResult, PinBox};
+use async_recursion::async_recursion;
 
-use async_trait::async_trait;
 use http::{Request, Response};
+use hyper::Body;
 
 pub(crate) type Params = BTreeMap<&'static str, &'static str>;
 
-pub type HandlerFunc =
-    dyn Fn(Request<hyper::Body>, Option<Response<hyper::Body>>, Params) -> HTTPResult + Sync;
-
-#[async_trait]
-pub trait Handler
-where
-    Self: Sync + Sized,
-{
-    async fn perform(
-        &self,
-        req: Request<hyper::Body>,
-        response: Option<Response<hyper::Body>>,
-        params: Params,
-    ) -> HTTPResult;
-}
+pub type HandlerFunc = fn(
+    req: Request<Body>,
+    response: Option<Response<Body>>,
+    params: Params,
+) -> PinBox<dyn Future<Output = HTTPResult> + Send + 'static>;
 
 #[derive(Clone)]
-pub struct BasicHandler
-where
-    Self: Sync + Sized,
-{
-    next: Option<Arc<BasicHandler>>,
-    func: &'static HandlerFunc,
+pub struct Handler {
+    handler: HandlerFunc,
+    next: Box<Option<Handler>>,
 }
 
-impl BasicHandler
+impl Handler
 where
-    Self: Sync + Sized,
+    Self: Send + 'static,
 {
-    pub fn new(next: Option<Arc<BasicHandler>>, func: &'static HandlerFunc) -> Self {
-        Self { next, func }
+    pub fn new(handler: HandlerFunc, next: Option<Handler>) -> Self {
+        Self {
+            handler,
+            next: Box::new(next),
+        }
     }
-}
 
-#[async_trait]
-impl Handler for BasicHandler
-where
-    Self: Sync + Sized,
-{
-    async fn perform(
+    #[async_recursion(?Send)]
+    pub async fn perform(
         &self,
         req: Request<hyper::Body>,
         response: Option<Response<hyper::Body>>,
         params: Params,
     ) -> HTTPResult {
-        let (req, response) = (*self.func)(req, response, params.clone())?;
+        let (req, response) = (self.handler)(req, response, params.clone()).await?;
         if self.next.is_some() {
-            return Ok(self
-                .next
-                .clone()
+            return Ok((*self.clone().next)
                 .unwrap()
                 .perform(req, response, params)
                 .await?);
@@ -77,7 +61,7 @@ mod tests {
     // wakka: wakka wakka
     // to the request. that's it!
     #[allow(dead_code)]
-    fn one(
+    async fn one(
         mut req: Request<Body>,
         _response: Option<Response<Body>>,
         _params: Params,
@@ -89,7 +73,7 @@ mod tests {
 
     // this method returns an OK status when the wakka header exists.
     #[allow(dead_code)]
-    fn two(
+    async fn two(
         req: Request<Body>,
         mut response: Option<Response<Body>>,
         _params: Params,
@@ -117,11 +101,8 @@ mod tests {
     // orchestration!!!!
     #[tokio::test]
     async fn test_handler_basic() {
-        use super::Handler;
-        use std::sync::Arc;
-
         // single stage handler that never yields a response
-        let bh = super::BasicHandler::new(None, &one);
+        let bh = super::Handler::new(|req, resp, params| Box::pin(one(req, resp, params)), None);
         let req = Request::default();
         let (req, response) = bh.perform(req, None, Params::new()).await.unwrap();
         if !req.headers().get("wakka").is_some() {
@@ -133,8 +114,12 @@ mod tests {
         }
 
         // two-stage handler; yields a response if the first one was good.
-        let bh_two = super::BasicHandler::new(None, &two);
-        let bh = super::BasicHandler::new(Some(Arc::new(bh_two.clone())), &one);
+        let bh_two =
+            super::Handler::new(|req, resp, params| Box::pin(two(req, resp, params)), None);
+        let bh = super::Handler::new(
+            |req, resp, params| Box::pin(one(req, resp, params)),
+            Some(bh_two.clone()),
+        );
         let (_, response) = bh.perform(req, None, Params::new()).await.unwrap();
 
         if !(response.is_some() && response.unwrap().status() == StatusCode::OK) {
@@ -148,5 +133,7 @@ mod tests {
         {
             panic!("no error")
         }
+
+        drop(bh)
     }
 }
