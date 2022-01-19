@@ -10,12 +10,6 @@ pub enum RoutePart {
 #[derive(Debug, Clone, PartialOrd)]
 pub struct Path(Vec<RoutePart>);
 
-impl PartialEq for Path {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_string() == other.to_string()
-    }
-}
-
 impl Eq for Path {}
 
 impl Ord for Path {
@@ -32,7 +26,11 @@ impl Path {
             if arg.starts_with(":") {
                 // is param
                 parts.push(RoutePart::Param(arg.trim_start_matches(":")));
-            } else if arg == "" { // skip empties
+            } else if arg == "" {
+                // skip empties. this will push additional leaders if there is an duplicate slash
+                // (e.g.: `//one/two`), which will fail on matching; we don't want to support this
+                // syntax in the router.
+                parts.push(RoutePart::Leader);
             } else {
                 // is not param
                 parts.push(RoutePart::PathComponent(arg));
@@ -90,28 +88,38 @@ impl Path {
         Ok(params)
     }
 
-    pub(crate) fn matches(&self, path: &'static str) -> bool {
-        let parts: Vec<&str> = path.split("/").collect();
+    pub(crate) fn matches(&self, s: &'static str) -> bool {
+        self.eq(&Self::new(s))
+    }
+}
 
-        if parts.len() != self.0.len() {
+impl PartialEq for Path {
+    fn eq(&self, other: &Self) -> bool {
+        if other.0.len() != self.0.len() {
             return false;
         }
 
         let mut i = 0;
-        for arg in parts {
-            if arg != "" {
-                let res = match self.0[i] {
-                    RoutePart::PathComponent(pc) => pc == arg,
-                    RoutePart::Param(_param) => {
-                        // FIXME advanced parameter shit here later
+        let mut leader_seen = false;
+        for arg in other.0.clone() {
+            let res = match self.0[i] {
+                RoutePart::PathComponent(_) => self.0[i] == arg,
+                RoutePart::Param(_param) => {
+                    // FIXME advanced parameter shit here later
+                    true
+                }
+                RoutePart::Leader => {
+                    if leader_seen {
+                        false
+                    } else {
+                        leader_seen = true;
                         true
                     }
-                    RoutePart::Leader => true,
-                };
-
-                if !res {
-                    return res;
                 }
+            };
+
+            if !res {
+                return false;
             }
 
             i += 1;
@@ -123,7 +131,7 @@ impl Path {
 
 impl Default for Path {
     fn default() -> Self {
-        Self(vec![RoutePart::Leader])
+        Self(Vec::new())
     }
 }
 
