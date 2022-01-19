@@ -105,13 +105,8 @@ mod tests {
         let bh = super::Handler::new(|req, resp, params| Box::pin(one(req, resp, params)), None);
         let req = Request::default();
         let (req, response) = bh.perform(req, None, Params::new()).await.unwrap();
-        if !req.headers().get("wakka").is_some() {
-            panic!("no wakkas")
-        }
-
-        if response.is_some() {
-            panic!("response should be none at this point")
-        }
+        assert!(req.headers().get("wakka").is_some());
+        assert!(response.is_none());
 
         // two-stage handler; yields a response if the first one was good.
         let bh_two =
@@ -122,17 +117,12 @@ mod tests {
         );
         let (_, response) = bh.perform(req, None, Params::new()).await.unwrap();
 
-        if !(response.is_some() && response.unwrap().status() == StatusCode::OK) {
-            panic!("response not ok")
-        }
+        assert!(response.is_some() && response.unwrap().status() == StatusCode::OK);
 
-        if !bh_two
+        assert!(bh_two
             .perform(Request::default(), None, Params::new())
             .await
-            .is_err()
-        {
-            panic!("no error")
-        }
+            .is_err());
 
         drop(bh)
     }
