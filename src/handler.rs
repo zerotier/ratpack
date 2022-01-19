@@ -6,7 +6,7 @@ use async_recursion::async_recursion;
 use http::{Request, Response};
 use hyper::Body;
 
-pub(crate) type Params = BTreeMap<&'static str, &'static str>;
+pub(crate) type Params = BTreeMap<String, String>;
 
 pub type HandlerFunc = fn(
     req: Request<Body>,

@@ -2,8 +2,8 @@ use crate::{handler::Params, Error};
 
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum RoutePart {
-    PathComponent(&'static str),
-    Param(&'static str),
+    PathComponent(String),
+    Param(String),
     Leader,
 }
 
@@ -19,13 +19,13 @@ impl Ord for Path {
 }
 
 impl Path {
-    pub(crate) fn new(path: &'static str) -> Self {
+    pub(crate) fn new(path: String) -> Self {
         let mut parts = Self::default();
 
         for arg in path.split("/") {
             if arg.starts_with(":") {
                 // is param
-                parts.push(RoutePart::Param(arg.trim_start_matches(":")));
+                parts.push(RoutePart::Param(arg.trim_start_matches(":").to_string()));
             } else if arg == "" {
                 // skip empties. this will push additional leaders if there is an duplicate slash
                 // (e.g.: `//one/two`), which will fail on matching; we don't want to support this
@@ -33,7 +33,7 @@ impl Path {
                 parts.push(RoutePart::Leader);
             } else {
                 // is not param
-                parts.push(RoutePart::PathComponent(arg));
+                parts.push(RoutePart::PathComponent(arg.to_string()));
             }
         }
 
@@ -46,7 +46,7 @@ impl Path {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn params(&self) -> Vec<&str> {
+    pub(crate) fn params(&self) -> Vec<String> {
         let mut params = Vec::new();
         for arg in self.0.clone() {
             match arg {
@@ -59,8 +59,11 @@ impl Path {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn extract(&self, provided: &'static str) -> Result<Params, Error> {
-        let parts: Vec<&str> = provided.split("/").collect();
+    pub(crate) fn extract(&self, provided: String) -> Result<Params, Error> {
+        let parts: Vec<String> = provided
+            .split("/")
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
         let mut params = Params::default();
 
         if parts.len() != self.0.len() {
@@ -71,7 +74,7 @@ impl Path {
 
         for part in self.0.clone() {
             match part {
-                RoutePart::Param(p) => params.insert(p, parts[i]),
+                RoutePart::Param(p) => params.insert(p, parts[i].clone()),
                 RoutePart::PathComponent(part) => {
                     if part != parts[i] {
                         return Err(Error::new("invalid path for parameter extraction"));
@@ -88,7 +91,7 @@ impl Path {
         Ok(params)
     }
 
-    pub(crate) fn matches(&self, s: &'static str) -> bool {
+    pub(crate) fn matches(&self, s: String) -> bool {
         self.eq(&Self::new(s))
     }
 }
@@ -102,7 +105,7 @@ impl PartialEq for Path {
         let mut i = 0;
         let mut leader_seen = false;
         for arg in other.0.clone() {
-            let res = match self.0[i] {
+            let res = match self.0[i].clone() {
                 RoutePart::PathComponent(_) => self.0[i] == arg,
                 RoutePart::Param(_param) => {
                     // FIXME advanced parameter shit here later
@@ -163,31 +166,34 @@ mod tests {
         use super::Path;
         use std::collections::BTreeMap;
 
-        let path = Path::new("/abc/def/ghi");
-        assert!(path.matches("/abc/def/ghi"));
-        assert!(!path.matches("//abc/def/ghi"));
-        assert!(!path.matches("/def/ghi"));
+        let path = Path::new("/abc/def/ghi".to_string());
+        assert!(path.matches("/abc/def/ghi".to_string()));
+        assert!(!path.matches("//abc/def/ghi".to_string()));
+        assert!(!path.matches("/def/ghi".to_string()));
         assert!(path.params().is_empty());
 
-        let path = Path::new("/abc/:def/:ghi/jkl");
-        assert!(!path.matches("/abc/def/ghi"));
-        assert!(path.matches("/abc/def/ghi/jkl"));
-        assert!(path.matches("/abc/ghi/def/jkl"));
-        assert!(path.matches("/abc/wooble/wakka/jkl"));
-        assert!(!path.matches("/nope/ghi/def/jkl"));
-        assert!(!path.matches("/abc/ghi/def/nope"));
+        let path = Path::new("/abc/:def/:ghi/jkl".to_string());
+        assert!(!path.matches("/abc/def/ghi".to_string()));
+        assert!(path.matches("/abc/def/ghi/jkl".to_string()));
+        assert!(path.matches("/abc/ghi/def/jkl".to_string()));
+        assert!(path.matches("/abc/wooble/wakka/jkl".to_string()));
+        assert!(!path.matches("/nope/ghi/def/jkl".to_string()));
+        assert!(!path.matches("/abc/ghi/def/nope".to_string()));
         assert_eq!(path.params().len(), 2);
 
         let mut bt = BTreeMap::new();
-        bt.insert("def", "wooble");
-        bt.insert("ghi", "wakka");
-
-        assert_eq!(path.extract("/abc/wooble/wakka/jkl").unwrap(), bt);
-        assert!(path.extract("/wooble/wakka/jkl").is_err());
-        assert!(path.extract("/def/wooble/wakka/jkl").is_err());
+        bt.insert("def".to_string(), "wooble".to_string());
+        bt.insert("ghi".to_string(), "wakka".to_string());
 
         assert_eq!(
-            Path::new("/abc/:wooble/:wakka/jkl").to_string(),
+            path.extract("/abc/wooble/wakka/jkl".to_string()).unwrap(),
+            bt
+        );
+        assert!(path.extract("/wooble/wakka/jkl".to_string()).is_err());
+        assert!(path.extract("/def/wooble/wakka/jkl".to_string()).is_err());
+
+        assert_eq!(
+            Path::new("/abc/:wooble/:wakka/jkl".to_string()).to_string(),
             "/abc/:wooble/:wakka/jkl".to_string()
         );
 
