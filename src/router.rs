@@ -80,47 +80,31 @@ impl Router {
 }
 
 mod tests {
-    use http::{Request, Response};
-    use hyper::Body;
-
-    use crate::{handler::Params, HTTPResult};
-
-    #[allow(dead_code)]
-    async fn handler_static(
-        req: Request<Body>,
-        _response: Option<Response<Body>>,
-        _params: Params,
-    ) -> HTTPResult {
-        return Ok((
-            req,
-            Some(
-                Response::builder()
-                    .status(400)
-                    .body(Body::from("hello, world".as_bytes()))?,
-            ),
-        ));
-    }
-
-    #[allow(dead_code)]
-    async fn handler_dynamic(
-        req: Request<Body>,
-        _response: Option<Response<Body>>,
-        params: Params,
-    ) -> HTTPResult {
-        return Ok((
-            req,
-            Some(Response::builder().status(400).body(Body::from(format!(
-                "hello, {}",
-                *params.get("name").unwrap()
-            )))?),
-        ));
-    }
-
     #[tokio::test]
     async fn test_route_dynamic() {
+        use http::{Method, Request, Response};
+        use hyper::Body;
+
+        use crate::{
+            handler::{Handler, Params},
+            HTTPResult,
+        };
+
         use super::Route;
-        use crate::handler::Handler;
-        use http::Method;
+
+        async fn handler_dynamic(
+            req: Request<Body>,
+            _response: Option<Response<Body>>,
+            params: Params,
+        ) -> HTTPResult {
+            return Ok((
+                req,
+                Some(Response::builder().status(400).body(Body::from(format!(
+                    "hello, {}",
+                    *params.get("name").unwrap()
+                )))?),
+            ));
+        }
 
         let route = Route::new(
             Method::GET,
@@ -184,9 +168,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_route_static() {
+        use http::{Method, Request, Response};
+        use hyper::Body;
+
+        use crate::{
+            handler::{Handler, Params},
+            HTTPResult,
+        };
+
         use super::Route;
-        use crate::handler::Handler;
-        use http::Method;
+
+        async fn handler_static(
+            req: Request<Body>,
+            _response: Option<Response<Body>>,
+            _params: Params,
+        ) -> HTTPResult {
+            return Ok((
+                req,
+                Some(
+                    Response::builder()
+                        .status(400)
+                        .body(Body::from("hello, world".as_bytes()))?,
+                ),
+            ));
+        }
 
         let route = Route::new(
             Method::GET,
