@@ -111,6 +111,8 @@ mod tests {
             ),
         );
 
+        assert!(route.dispatch("/a", Request::default()).await.is_err());
+
         assert!(route.dispatch("/a/b/c", Request::default()).await.is_ok());
 
         let body = hyper::body::to_bytes(
