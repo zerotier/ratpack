@@ -51,56 +51,55 @@ where
 }
 
 mod tests {
-    use crate::{Error, HTTPResult};
-    use http::{HeaderValue, Request, Response, StatusCode};
-    use hyper::Body;
-
-    use super::Params;
-
-    // this method adds a header:
-    // wakka: wakka wakka
-    // to the request. that's it!
-    #[allow(dead_code)]
-    async fn one(
-        mut req: Request<Body>,
-        _response: Option<Response<Body>>,
-        _params: Params,
-    ) -> HTTPResult {
-        let headers = req.headers_mut();
-        headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
-        Ok((req, None))
-    }
-
-    // this method returns an OK status when the wakka header exists.
-    #[allow(dead_code)]
-    async fn two(
-        req: Request<Body>,
-        mut response: Option<Response<Body>>,
-        _params: Params,
-    ) -> HTTPResult {
-        if let Some(header) = req.headers().get("wakka") {
-            if header != "wakka wakka" {
-                return Err(Error::new("invalid header value"));
-            }
-
-            if response.is_some() {
-                return Ok((req, response));
-            } else {
-                let resp = Response::builder()
-                    .status(StatusCode::OK)
-                    .body(Body::default())?;
-                response.replace(resp);
-
-                return Ok((req, response));
-            }
-        }
-
-        Err(Error::default())
-    }
 
     // orchestration!!!!
     #[tokio::test]
     async fn test_handler_basic() {
+        use crate::{Error, HTTPResult};
+        use http::{HeaderValue, Request, Response, StatusCode};
+        use hyper::Body;
+
+        use super::Params;
+
+        // this method adds a header:
+        // wakka: wakka wakka
+        // to the request. that's it!
+        async fn one(
+            mut req: Request<Body>,
+            _response: Option<Response<Body>>,
+            _params: Params,
+        ) -> HTTPResult {
+            let headers = req.headers_mut();
+            headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
+            Ok((req, None))
+        }
+
+        // this method returns an OK status when the wakka header exists.
+        async fn two(
+            req: Request<Body>,
+            mut response: Option<Response<Body>>,
+            _params: Params,
+        ) -> HTTPResult {
+            if let Some(header) = req.headers().get("wakka") {
+                if header != "wakka wakka" {
+                    return Err(Error::new("invalid header value"));
+                }
+
+                if response.is_some() {
+                    return Ok((req, response));
+                } else {
+                    let resp = Response::builder()
+                        .status(StatusCode::OK)
+                        .body(Body::default())?;
+                    response.replace(resp);
+
+                    return Ok((req, response));
+                }
+            }
+
+            Err(Error::default())
+        }
+
         // single stage handler that never yields a response
         let bh = super::Handler::new(|req, resp, params| Box::pin(one(req, resp, params)), None);
         let req = Request::default();
