@@ -1,14 +1,24 @@
+pub mod app;
 pub mod handler;
 pub mod macros;
 pub mod path;
 pub mod router;
 
-use handler::Handler;
 use http::{Request, Response};
-
-use std::{collections::BTreeMap, pin::Pin};
+use std::pin::Pin;
 
 pub(crate) type PinBox<F> = Pin<Box<F>>;
+
+pub struct ServerError(String);
+
+impl<T> From<T> for ServerError
+where
+    T: ToString,
+{
+    fn from(t: T) -> Self {
+        ServerError(t.to_string())
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -42,8 +52,3 @@ impl From<http::Error> for Error {
 }
 
 pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>>), Error>;
-
-pub struct App {
-    #[allow(dead_code)] // FIXME remove
-    routes: BTreeMap<String, Handler>,
-}

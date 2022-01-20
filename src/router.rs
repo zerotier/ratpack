@@ -34,7 +34,6 @@ impl Ord for Route {
 }
 
 impl Route {
-    #[allow(dead_code)]
     fn new(method: http::Method, path: String, handler: Handler) -> Self {
         Self {
             method,
@@ -63,7 +62,6 @@ impl Router {
         Self(Vec::new())
     }
 
-    #[allow(dead_code)]
     pub(crate) fn add(&mut self, method: http::Method, path: String, ch: Handler) -> Self {
         self.0.push(Route::new(method, path, ch));
         self.clone()
