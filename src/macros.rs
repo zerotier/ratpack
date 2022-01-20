@@ -96,5 +96,12 @@ mod tests {
 
         assert_eq!(req.headers().get("wakka").unwrap(), "wakka wakka");
         assert!(response.is_none());
+
+        let handler = compose_handler!(two);
+
+        assert!(handler
+            .perform(Request::default(), None, Params::new())
+            .await
+            .is_err());
     }
 }
