@@ -1,4 +1,5 @@
-use http::Request;
+use http::{Request, Response};
+use hyper::Body;
 
 use crate::{handler::Handler, path::Path, Error, HTTPResult};
 
@@ -33,6 +34,7 @@ impl Ord for Route {
 }
 
 impl Route {
+    #[allow(dead_code)]
     fn new(method: http::Method, path: String, handler: Handler) -> Self {
         Self {
             method,
@@ -61,21 +63,29 @@ impl Router {
         Self(Vec::new())
     }
 
-    pub fn add(&mut self, method: http::Method, path: String, ch: Handler) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn add(&mut self, method: http::Method, path: String, ch: Handler) -> Self {
         self.0.push(Route::new(method, path, ch));
         self.clone()
     }
 
-    pub fn find(&self, req: &'static Request<hyper::Body>) -> Result<Handler, Error> {
-        let path = req.uri().path();
+    #[allow(dead_code)]
+    pub(crate) async fn dispatch(&self, req: Request<Body>) -> Result<Response<Body>, Error> {
+        let path = req.uri().path().to_string();
 
-        for route_path in self.0.clone() {
-            if route_path.path.matches(path.to_string()) && route_path.method.eq(req.method()) {
-                return Ok(route_path.handler);
+        for route in self.0.clone() {
+            if route.path.matches(path.to_string()) && route.method.eq(req.method()) {
+                let params = route.path.extract(path)?;
+                let (_, response) = route.handler.perform(req, None, params).await?;
+                if response.is_none() {
+                    return Err(Error(http::StatusCode::INTERNAL_SERVER_ERROR.to_string()));
+                }
+
+                return Ok(response.unwrap());
             }
         }
 
-        Err(Error::new("no route found for request"))
+        Err(Error(http::StatusCode::NOT_FOUND.to_string()))
     }
 }
 
@@ -248,5 +258,94 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_router() {}
+    async fn test_router() {
+        use super::Router;
+        use crate::{
+            handler::{Handler, Params},
+            HTTPResult,
+        };
+        use http::{Method, Request, Response};
+        use hyper::Body;
+
+        async fn handler_dynamic(
+            req: Request<Body>,
+            _response: Option<Response<Body>>,
+            params: Params,
+        ) -> HTTPResult {
+            return Ok((
+                req,
+                Some(Response::builder().status(400).body(Body::from(format!(
+                    "hello, {}",
+                    *params.get("name").unwrap()
+                )))?),
+            ));
+        }
+
+        async fn handler_static(
+            req: Request<Body>,
+            _response: Option<Response<Body>>,
+            _params: Params,
+        ) -> HTTPResult {
+            return Ok((
+                req,
+                Some(
+                    Response::builder()
+                        .status(400)
+                        .body(Body::from("hello, world".as_bytes()))?,
+                ),
+            ));
+        }
+
+        let mut router = Router::new();
+
+        router.add(
+            Method::GET,
+            "/a/b/c".to_string(),
+            Handler::new(
+                |req, resp, params| Box::pin(handler_static(req, resp, params)),
+                None,
+            ),
+        );
+
+        router.add(
+            Method::GET,
+            "/c/b/a/:name".to_string(),
+            Handler::new(
+                |req, resp, params| Box::pin(handler_dynamic(req, resp, params)),
+                None,
+            ),
+        );
+
+        let response = router
+            .dispatch(
+                Request::builder()
+                    .uri("/a/b/c")
+                    .method(Method::GET)
+                    .body(Body::default())
+                    .unwrap(),
+            )
+            .await;
+        assert!(response.is_ok());
+
+        let body = hyper::body::to_bytes(response.unwrap()).await.unwrap();
+        assert_eq!(body, "hello, world".as_bytes());
+
+        for name in vec![
+            "erik", "adam", "sean", "travis", "joseph", "grant", "joy", "steve", "marc",
+        ] {
+            let response = router
+                .dispatch(
+                    Request::builder()
+                        .uri(&format!("/c/b/a/{}", name))
+                        .method(Method::GET)
+                        .body(Body::default())
+                        .unwrap(),
+                )
+                .await;
+            assert!(response.is_ok());
+
+            let body = hyper::body::to_bytes(response.unwrap()).await.unwrap();
+            assert_eq!(body, format!("hello, {}", name).as_bytes());
+        }
+    }
 }
