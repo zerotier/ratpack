@@ -347,5 +347,18 @@ mod tests {
             let body = hyper::body::to_bytes(response.unwrap()).await.unwrap();
             assert_eq!(body, format!("hello, {}", name).as_bytes());
         }
+
+        for bad_route in vec!["/", "/bad", "/bad/route", "/a/b/c/param", "/c/b/a/0/bad"] {
+            let response = router
+                .dispatch(
+                    Request::builder()
+                        .uri(bad_route)
+                        .method(Method::GET)
+                        .body(Body::default())
+                        .unwrap(),
+                )
+                .await;
+            assert!(response.is_err());
+        }
     }
 }
