@@ -10,11 +10,14 @@ use std::{collections::BTreeMap, pin::Pin};
 pub(crate) type PinBox<F> = Pin<Box<F>>;
 
 #[derive(Clone, Debug)]
-pub struct Error(String);
+pub enum Error {
+    StatusCode(http::StatusCode),
+    InternalServerError(String),
+}
 
 impl Default for Error {
     fn default() -> Self {
-        Self(String::from("internal server error"))
+        Self::InternalServerError("internal server error".to_string())
     }
 }
 
@@ -23,7 +26,11 @@ impl Error {
     where
         T: ToString,
     {
-        Self(message.to_string())
+        Self::InternalServerError(message.to_string())
+    }
+
+    pub fn new_status(error: http::StatusCode) -> Self {
+        Self::StatusCode(error)
     }
 }
 

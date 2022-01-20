@@ -48,7 +48,7 @@ impl Route {
         let params = self.path.extract(provided)?;
 
         if self.method != req.method() {
-            return Err(Error(http::StatusCode::NOT_FOUND.to_string()));
+            return Err(Error::StatusCode(http::StatusCode::NOT_FOUND));
         }
 
         self.handler.perform(req, None, params).await
@@ -78,14 +78,14 @@ impl Router {
                 let params = route.path.extract(path)?;
                 let (_, response) = route.handler.perform(req, None, params).await?;
                 if response.is_none() {
-                    return Err(Error(http::StatusCode::INTERNAL_SERVER_ERROR.to_string()));
+                    return Err(Error::StatusCode(http::StatusCode::INTERNAL_SERVER_ERROR));
                 }
 
                 return Ok(response.unwrap());
             }
         }
 
-        Err(Error(http::StatusCode::NOT_FOUND.to_string()))
+        Err(Error::StatusCode(http::StatusCode::NOT_FOUND))
     }
 }
 
