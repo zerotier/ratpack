@@ -31,7 +31,7 @@ where
         }
     }
 
-    #[async_recursion(?Send)]
+    #[async_recursion]
     pub async fn perform(
         &self,
         req: Request<hyper::Body>,
