@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, future::Future};
 
-use crate::{HTTPResult, PinBox};
+use crate::{app::App, HTTPResult, PinBox};
 use async_recursion::async_recursion;
 
 use http::{Request, Response};
@@ -8,23 +8,25 @@ use hyper::Body;
 
 pub type Params = BTreeMap<String, String>;
 
-pub type HandlerFunc = fn(
+pub type HandlerFunc<S> = fn(
     req: Request<Body>,
     response: Option<Response<Body>>,
     params: Params,
+    app: App<S>,
 ) -> PinBox<dyn Future<Output = HTTPResult> + Send>;
 
 #[derive(Clone)]
-pub struct Handler {
-    handler: HandlerFunc,
-    next: Box<Option<Handler>>,
+pub struct Handler<S: Clone + Send> {
+    handler: HandlerFunc<S>,
+    next: Box<Option<Handler<S>>>,
 }
 
-impl Handler
+impl<S> Handler<S>
 where
     Self: Send,
+    S: Clone + Send,
 {
-    pub fn new(handler: HandlerFunc, next: Option<Handler>) -> Self {
+    pub fn new(handler: HandlerFunc<S>, next: Option<Handler<S>>) -> Self {
         Self {
             handler,
             next: Box::new(next),
@@ -37,12 +39,13 @@ where
         req: Request<hyper::Body>,
         response: Option<Response<hyper::Body>>,
         params: Params,
+        app: App<S>,
     ) -> HTTPResult {
-        let (req, response) = (self.handler)(req, response, params.clone()).await?;
+        let (req, response) = (self.handler)(req, response, params.clone(), app.clone()).await?;
         if self.next.is_some() {
             return Ok((*self.clone().next)
                 .unwrap()
-                .perform(req, response, params)
+                .perform(req, response, params, app)
                 .await?);
         }
 
@@ -53,11 +56,14 @@ where
 mod tests {
     #[tokio::test]
     async fn test_handler_basic() {
-        use crate::{Error, HTTPResult};
+        use crate::{app::App, Error, HTTPResult};
         use http::{HeaderValue, Request, Response, StatusCode};
         use hyper::Body;
 
         use super::Params;
+
+        #[derive(Clone)]
+        struct State;
 
         // this method adds a header:
         // wakka: wakka wakka
@@ -66,6 +72,7 @@ mod tests {
             mut req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
+            _app: App<State>,
         ) -> HTTPResult {
             let headers = req.headers_mut();
             headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
@@ -77,6 +84,7 @@ mod tests {
             req: Request<Body>,
             mut response: Option<Response<Body>>,
             _params: Params,
+            _app: App<State>,
         ) -> HTTPResult {
             if let Some(header) = req.headers().get("wakka") {
                 if header != "wakka wakka" {
@@ -99,26 +107,37 @@ mod tests {
         }
 
         // single stage handler that never yields a response
-        let bh = super::Handler::new(|req, resp, params| Box::pin(one(req, resp, params)), None);
+        let bh = super::Handler::new(
+            |req, resp, params, app| Box::pin(one(req, resp, params, app)),
+            None,
+        );
         let req = Request::default();
-        let (req, response) = bh.perform(req, None, Params::new()).await.unwrap();
+        let (req, response) = bh
+            .perform(req, None, Params::new(), App::new())
+            .await
+            .unwrap();
 
         assert!(req.headers().get("wakka").is_some());
         assert!(response.is_none());
 
         // two-stage handler; yields a response if the first one was good.
-        let bh_two =
-            super::Handler::new(|req, resp, params| Box::pin(two(req, resp, params)), None);
+        let bh_two = super::Handler::new(
+            |req, resp, params, app| Box::pin(two(req, resp, params, app)),
+            None,
+        );
         let bh = super::Handler::new(
-            |req, resp, params| Box::pin(one(req, resp, params)),
+            |req, resp, params, app| Box::pin(one(req, resp, params, app)),
             Some(bh_two.clone()),
         );
-        let (_, response) = bh.perform(req, None, Params::new()).await.unwrap();
+        let (_, response) = bh
+            .perform(req, None, Params::new(), App::new())
+            .await
+            .unwrap();
 
         assert!(response.is_some() && response.unwrap().status() == StatusCode::OK);
 
         assert!(bh_two
-            .perform(Request::default(), None, Params::new())
+            .perform(Request::default(), None, Params::new(), App::new())
             .await
             .is_err());
 

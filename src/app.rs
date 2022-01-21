@@ -1,61 +1,74 @@
-use std::{convert::Infallible, net::SocketAddr};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use http::{Method, Request, Response, StatusCode};
 use hyper::{server::conn::Http, service::service_fn, Body};
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Mutex};
 
 use crate::{handler::Handler, router::Router, Error, ServerError};
 
 #[derive(Clone)]
-pub struct App {
-    router: Router,
+pub struct App<S: Clone + Send> {
+    router: Router<S>,
+    global_state: Option<Arc<Mutex<S>>>,
 }
 
-impl App {
+impl<S: 'static + Clone + Send> App<S> {
     pub fn new() -> Self {
         Self {
             router: Router::new(),
+            global_state: None,
         }
     }
 
-    pub fn get(&mut self, path: &str, ch: Handler) {
+    pub fn with_state(state: S) -> Self {
+        Self {
+            router: Router::new(),
+            global_state: Some(Arc::new(Mutex::new(state))),
+        }
+    }
+
+    pub async fn state(&self) -> Option<Arc<Mutex<S>>> {
+        self.global_state.clone()
+    }
+
+    pub fn get(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::GET, path.to_string(), ch);
     }
 
-    pub fn post(&mut self, path: &str, ch: Handler) {
+    pub fn post(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::POST, path.to_string(), ch);
     }
 
-    pub fn delete(&mut self, path: &str, ch: Handler) {
+    pub fn delete(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::DELETE, path.to_string(), ch);
     }
 
-    pub fn put(&mut self, path: &str, ch: Handler) {
+    pub fn put(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::PUT, path.to_string(), ch);
     }
 
-    pub fn options(&mut self, path: &str, ch: Handler) {
+    pub fn options(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::OPTIONS, path.to_string(), ch);
     }
 
-    pub fn patch(&mut self, path: &str, ch: Handler) {
+    pub fn patch(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::PATCH, path.to_string(), ch);
     }
 
-    pub fn head(&mut self, path: &str, ch: Handler) {
+    pub fn head(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::HEAD, path.to_string(), ch);
     }
 
-    pub fn connect(&mut self, path: &str, ch: Handler) {
+    pub fn connect(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::CONNECT, path.to_string(), ch);
     }
 
-    pub fn trace(&mut self, path: &str, ch: Handler) {
+    pub fn trace(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::TRACE, path.to_string(), ch);
     }
 
     pub async fn dispatch(&self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
-        match self.router.dispatch(req).await {
+        match self.router.dispatch(req, self.clone()).await {
             Ok(resp) => Ok(resp),
             Err(e) => match e {
                 Error::StatusCode(sc) => Ok(Response::builder()

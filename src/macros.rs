@@ -4,10 +4,10 @@ macro_rules! compose_handler {
         {
             use $crate::handler::{HandlerFunc, Handler};
             {
-                let mut funcs: Vec<HandlerFunc> = Vec::new();
+                let mut funcs: Vec<HandlerFunc<_>> = Vec::new();
 
                 $(
-                    funcs.push(|req, resp, params| Box::pin($x(req, resp, params)));
+                    funcs.push(|req, resp, params, app| Box::pin($x(req, resp, params, app)));
                 )*
 
                 if funcs.len() == 0 {
@@ -16,7 +16,7 @@ macro_rules! compose_handler {
 
 
                 let mut handlers = Vec::new();
-                let mut last: Option<Handler> = None;
+                let mut last: Option<Handler<_>> = None;
                 funcs.reverse();
 
                 for func in funcs {
@@ -36,7 +36,10 @@ mod tests {
         use http::{HeaderValue, Request, Response, StatusCode};
         use hyper::Body;
 
-        use crate::{handler::Params, Error, HTTPResult};
+        use crate::{app::App, handler::Params, Error, HTTPResult};
+
+        #[derive(Clone)]
+        struct State;
 
         // this method adds a header:
         // wakka: wakka wakka
@@ -45,6 +48,7 @@ mod tests {
             mut req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
+            _app: App<State>,
         ) -> HTTPResult {
             let headers = req.headers_mut();
             headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
@@ -56,6 +60,7 @@ mod tests {
             req: Request<Body>,
             mut response: Option<Response<Body>>,
             _params: Params,
+            _app: App<State>,
         ) -> HTTPResult {
             if let Some(header) = req.headers().get("wakka") {
                 if header != "wakka wakka" {
@@ -80,7 +85,7 @@ mod tests {
         let handler = compose_handler!(one, two);
 
         let (req, response) = handler
-            .perform(Request::default(), None, Params::new())
+            .perform(Request::default(), None, Params::new(), App::new())
             .await
             .unwrap();
 
@@ -90,7 +95,7 @@ mod tests {
         let handler = compose_handler!(one);
 
         let (req, response) = handler
-            .perform(Request::default(), None, Params::new())
+            .perform(Request::default(), None, Params::new(), App::new())
             .await
             .unwrap();
 
@@ -100,7 +105,7 @@ mod tests {
         let handler = compose_handler!(two);
 
         assert!(handler
-            .perform(Request::default(), None, Params::new())
+            .perform(Request::default(), None, Params::new(), App::new())
             .await
             .is_err());
     }

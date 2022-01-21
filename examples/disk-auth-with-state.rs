@@ -2,17 +2,11 @@ use http::{Request, Response, StatusCode};
 use hyper::Body;
 use ratpack::{app::App, compose_handler, handler::Params, Error, HTTPResult, ServerError};
 
-const DEFAULT_AUTHTOKEN: &str = "867-5309";
-const AUTHTOKEN_FILENAME: &str = "authtoken.secret";
-
-#[derive(Clone)]
-struct State;
-
 async fn validate_authtoken(
     req: Request<Body>,
     resp: Option<Response<Body>>,
     _params: Params,
-    _app: App<State>,
+    app: App<State>,
 ) -> HTTPResult {
     let token = req.headers().get("X-AuthToken");
     if token.is_none() {
@@ -21,15 +15,14 @@ async fn validate_authtoken(
 
     let token = token.unwrap();
 
-    let matches = match std::fs::metadata(AUTHTOKEN_FILENAME) {
-        Ok(_) => {
-            let s = std::fs::read_to_string(AUTHTOKEN_FILENAME)?;
-            s.as_str() == token
-        }
-        Err(_) => DEFAULT_AUTHTOKEN == token,
-    };
+    let state = app.state().await;
+    if state.is_none() {
+        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
+    }
 
-    if !matches {
+    let state = state.unwrap();
+
+    if !(state.clone().lock().await.authtoken == token) {
         return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
     }
 
@@ -51,9 +44,16 @@ async fn hello(
     ));
 }
 
+#[derive(Clone)]
+struct State {
+    authtoken: &'static str,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), ServerError> {
-    let mut app = App::new();
+    let mut app = App::with_state(State {
+        authtoken: "867-5309",
+    });
     app.get("/auth/:name", compose_handler!(validate_authtoken, hello));
     app.get("/:name", compose_handler!(hello));
 
