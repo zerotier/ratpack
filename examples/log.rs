@@ -3,14 +3,11 @@ use hyper::Body;
 use log::LevelFilter;
 use ratpack::{app::App, compose_handler, handler::Params, HTTPResult, ServerError};
 
-#[derive(Clone)]
-struct State;
-
 async fn log(
     req: Request<Body>,
     resp: Option<Response<Body>>,
     _params: Params,
-    _app: App<State>,
+    _app: App<()>,
 ) -> HTTPResult {
     log::trace!("New request: {}", req.uri().path());
     Ok((req, resp))
@@ -20,7 +17,7 @@ async fn hello(
     req: Request<Body>,
     _resp: Option<Response<Body>>,
     params: Params,
-    _app: App<State>,
+    _app: App<()>,
 ) -> HTTPResult {
     let name = params.get("name").unwrap();
     log::info!("Saying hello to {}", name);
