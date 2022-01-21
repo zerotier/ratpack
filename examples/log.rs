@@ -1,7 +1,7 @@
-use http::{Request, Response, StatusCode};
+use http::{Request, Response};
 use hyper::Body;
 use log::LevelFilter;
-use ratpack::{app::App, compose_handler, handler::Params, Error, HTTPResult, ServerError};
+use ratpack::{app::App, compose_handler, handler::Params, HTTPResult, ServerError};
 
 async fn log(req: Request<Body>, resp: Option<Response<Body>>, _params: Params) -> HTTPResult {
     log::trace!("New request: {}", req.uri().path());
