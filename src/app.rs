@@ -6,6 +6,7 @@ use tokio::net::TcpListener;
 
 use crate::{handler::Handler, router::Router, Error, ServerError};
 
+#[derive(Clone)]
 pub struct App {
     router: Router,
 }

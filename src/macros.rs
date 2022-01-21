@@ -2,7 +2,7 @@
 macro_rules! compose_handler {
     ($( $x:path ),*) => {
         {
-            use crate::handler::{HandlerFunc, Handler};
+            use $crate::handler::{HandlerFunc, Handler};
             {
                 let mut funcs: Vec<HandlerFunc> = Vec::new();
 

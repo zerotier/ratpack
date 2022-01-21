@@ -67,7 +67,6 @@ impl Router {
         self.clone()
     }
 
-    #[allow(dead_code)]
     pub(crate) async fn dispatch(&self, req: Request<Body>) -> Result<Response<Body>, Error> {
         let path = req.uri().path().to_string();
 

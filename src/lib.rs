@@ -9,6 +9,7 @@ use std::pin::Pin;
 
 pub(crate) type PinBox<F> = Pin<Box<F>>;
 
+#[derive(Debug, Clone)]
 pub struct ServerError(String);
 
 impl<T> From<T> for ServerError

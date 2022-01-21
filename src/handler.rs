@@ -6,13 +6,13 @@ use async_recursion::async_recursion;
 use http::{Request, Response};
 use hyper::Body;
 
-pub(crate) type Params = BTreeMap<String, String>;
+pub type Params = BTreeMap<String, String>;
 
 pub type HandlerFunc = fn(
     req: Request<Body>,
     response: Option<Response<Body>>,
     params: Params,
-) -> PinBox<dyn Future<Output = HTTPResult> + Send + 'static>;
+) -> PinBox<dyn Future<Output = HTTPResult> + Send>;
 
 #[derive(Clone)]
 pub struct Handler {
@@ -22,7 +22,7 @@ pub struct Handler {
 
 impl Handler
 where
-    Self: Send + 'static,
+    Self: Send,
 {
     pub fn new(handler: HandlerFunc, next: Option<Handler>) -> Self {
         Self {
