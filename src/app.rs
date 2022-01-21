@@ -70,14 +70,16 @@ impl App {
         }
     }
 
-    pub async fn serve(&'static self, addr: String) -> Result<(), ServerError> {
+    pub async fn serve(self, addr: &str) -> Result<(), ServerError> {
         let socketaddr: SocketAddr = addr.parse()?;
-
-        let s = self.clone();
-        let sfn = service_fn(move |req: Request<Body>| s.dispatch(req));
 
         let tcp_listener = TcpListener::bind(socketaddr).await?;
         loop {
+            let s = self.clone();
+            let sfn = service_fn(move |req: Request<Body>| {
+                let s = s.clone();
+                async move { s.clone().dispatch(req).await }
+            });
             let (tcp_stream, _) = tcp_listener.accept().await?;
             tokio::task::spawn(async move {
                 if let Err(http_err) = Http::new()
