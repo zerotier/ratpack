@@ -10,3 +10,7 @@ hyper = { version = "*", features = [ "http1", "http2", "server", "runtime", "tc
 http = "*"
 async-recursion = "*"
 tokio = { version = "*", features = [ "full" ] }
+
+[dev-dependencies]
+log = "*"
+env_logger = "*"
