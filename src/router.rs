@@ -42,7 +42,6 @@ impl<S: Clone + Send> Route<S> {
         }
     }
 
-    #[allow(dead_code)]
     async fn dispatch(
         &self,
         provided: String,
@@ -81,8 +80,7 @@ impl<S: Clone + Send> Router<S> {
 
         for route in self.0.clone() {
             if route.path.matches(path.to_string()) && route.method.eq(req.method()) {
-                let params = route.path.extract(path)?;
-                let (_, response) = route.handler.perform(req, None, params, app).await?;
+                let (_, response) = route.dispatch(path.to_string(), req, app).await?;
                 if response.is_none() {
                     return Err(Error::StatusCode(http::StatusCode::INTERNAL_SERVER_ERROR));
                 }

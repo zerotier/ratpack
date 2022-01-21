@@ -45,8 +45,7 @@ impl Path {
         self.clone()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn params(&self) -> Vec<String> {
+    pub fn params(&self) -> Vec<String> {
         let mut params = Vec::new();
         for arg in self.0.clone() {
             match arg {
@@ -58,7 +57,6 @@ impl Path {
         params
     }
 
-    #[allow(dead_code)]
     pub(crate) fn extract(&self, provided: String) -> Result<Params, Error> {
         let parts: Vec<String> = provided
             .split("/")
