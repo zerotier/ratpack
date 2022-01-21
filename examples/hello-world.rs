@@ -2,7 +2,15 @@ use http::{Request, Response};
 use hyper::Body;
 use ratpack::{app::App, compose_handler, handler::Params, HTTPResult, ServerError};
 
-async fn hello(req: Request<Body>, _resp: Option<Response<Body>>, params: Params) -> HTTPResult {
+#[derive(Clone)]
+struct State;
+
+async fn hello(
+    req: Request<Body>,
+    _resp: Option<Response<Body>>,
+    params: Params,
+    _app: App<State>,
+) -> HTTPResult {
     let name = params.get("name").unwrap();
     let bytes = Body::from(format!("hello, {}!\n", name));
 
