@@ -46,9 +46,12 @@ impl Error {
     }
 }
 
-impl From<http::Error> for Error {
-    fn from(e: http::Error) -> Self {
-        Self::new(e)
+impl<T> From<T> for Error
+where
+    T: ToString,
+{
+    fn from(t: T) -> Self {
+        Self::new(t.to_string())
     }
 }
 
