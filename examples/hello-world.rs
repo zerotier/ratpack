@@ -1,6 +1,4 @@
-use http::{Request, Response};
-use hyper::Body;
-use ratpack::{app::App, compose_handler, HTTPResult, Params, ServerError};
+use ratpack::prelude::*;
 
 async fn hello(
     req: Request<Body>,

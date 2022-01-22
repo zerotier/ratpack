@@ -17,9 +17,7 @@ Here is an example which carries global _application state_ as an authentication
 **Note:** this is available at [examples/auth-with-state.rs](examples/auth-with-state.rs). It can also be run with cargo: `cargo run --example auth-with-state`.
 
 ```rust
-use http::{Request, Response, StatusCode};
-use hyper::Body;
-use ratpack::{app::App, compose_handler, handler::Params, Error, HTTPResult, ServerError};
+use ratpack::prelude::*;
 
 // our authtoken validator, this queries the app state and the header
 // `X-AuthToken` and compares the two. If there are any discrepancies, it
