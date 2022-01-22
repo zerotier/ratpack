@@ -71,7 +71,9 @@ where
 
 /// HTTPResult is the return type for handlers. If a handler terminates at the end of its chain
 /// with [std::option::Option::None] as the [http::Response], a 500 Internal Server Error will be
-/// returned.
+/// returned. If you wish to return Err(), a [http::StatusCode] or [std::string::String] can be
+/// returned, the former is resolved to its status with an empty body, and the latter corresponds
+/// to a 500 Internal Server Error with the body set to the string.
 pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>>), Error>;
 
 /// A convenience import to gather all of `ratpack`'s dependencies in one easy place.

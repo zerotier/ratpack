@@ -47,6 +47,7 @@ use crate::{handler::Handler, router::Router, Error, ServerError};
 /// Variadic path components are accessible through the [crate::Params] implementation. Paths are
 /// typically used through [crate::app::App] methods that use a string form of the Path.
 ///
+/// Requests are routed through paths to [crate::handler::HandlerFunc]s.
 #[derive(Clone)]
 pub struct App<S: Clone + Send> {
     router: Router<S>,

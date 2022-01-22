@@ -7,7 +7,29 @@ use http::{Request, Response};
 use hyper::Body;
 
 /// HandlerFunc is the type signature of all handlers. All handlers must conform to this pattern to
-/// be used with `compose_handler!`.
+/// be used with [crate::compose_handler!].
+///
+/// Example:
+///
+/// ```
+/// use ratpack::prelude::*;
+///
+/// async fn hello(
+///     req: Request<Body>,
+///     _resp: Option<Response<Body>>,
+///     params: Params,
+///     _app: App<()>,
+/// ) -> HTTPResult {
+///     let name = params.get("name").unwrap();
+///     let bytes = Body::from(format!("hello, {}!\n", name));
+///
+///     return Ok((
+///         req,
+///         Some(Response::builder().status(200).body(bytes).unwrap()),
+///     ));
+/// }
+/// ```
+///
 pub type HandlerFunc<S> = fn(
     req: Request<Body>,
     response: Option<Response<Body>>,
@@ -15,6 +37,10 @@ pub type HandlerFunc<S> = fn(
     app: App<S>,
 ) -> PinBox<dyn Future<Output = HTTPResult> + Send>;
 
+/// Handler is the structure of the handler. Typically, you will not use this directly, and instead
+/// interact with the [crate::compose_handler!] macro. That said, if you wanted to define your own
+/// macros or otherwise compose more complicated structures for your handlers, this is available to
+/// you.
 #[derive(Clone)]
 pub struct Handler<S: Clone + Send> {
     handler: HandlerFunc<S>,
@@ -26,6 +52,8 @@ where
     Self: Send,
     S: Clone + Send,
 {
+    /// Construct a new handler composed of a HandlerFunc with state, and an optional next handler
+    /// in the chain.
     pub fn new(handler: HandlerFunc<S>, next: Option<Handler<S>>) -> Self {
         Self {
             handler,
@@ -33,6 +61,7 @@ where
         }
     }
 
+    /// Perform the function, this will recursively execute all handlers in the chain.
     #[async_recursion]
     pub async fn perform(
         &self,
