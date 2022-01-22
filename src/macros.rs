@@ -1,3 +1,9 @@
+/// compose_handler allows you to combine [crate::handler::HandlerFunc] functions into a single [crate::handler::Handler], so that
+/// they cascade through a chain of responsibility. This means that each handler will feed its
+/// output into the input of the next. To start, the first [http::Response] is
+/// [std::option::Option::None], and the final return Response must be non-None otherwise a 500
+/// Internal Server Error is returned. Handlers may do anything they wish to the [http::Request] between
+/// processing periods, including replacing the request entirely.
 #[macro_export]
 macro_rules! compose_handler {
     ($( $x:path ),*) => {
