@@ -4,8 +4,9 @@ async fn validate_authtoken(
     req: Request<Body>,
     resp: Option<Response<Body>>,
     _params: Params,
-    app: App<State>,
-) -> HTTPResult {
+    app: App<State, NoState>,
+    _state: NoState,
+) -> HTTPResult<NoState> {
     let token = req.headers().get("X-AuthToken");
     if token.is_none() {
         return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
@@ -24,21 +25,23 @@ async fn validate_authtoken(
         return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
     }
 
-    return Ok((req, resp));
+    return Ok((req, resp, NoState {}));
 }
 
 async fn hello(
     req: Request<Body>,
     _resp: Option<Response<Body>>,
     params: Params,
-    _app: App<State>,
-) -> HTTPResult {
+    _app: App<State, NoState>,
+    _state: NoState,
+) -> HTTPResult<NoState> {
     let name = params.get("name").unwrap();
     let bytes = Body::from(format!("hello, {}!\n", name));
 
     return Ok((
         req,
         Some(Response::builder().status(200).body(bytes).unwrap()),
+        NoState {},
     ));
 }
 

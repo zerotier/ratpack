@@ -5,18 +5,20 @@ async fn log(
     req: Request<Body>,
     resp: Option<Response<Body>>,
     _params: Params,
-    _app: App<()>,
-) -> HTTPResult {
+    _app: App<(), NoState>,
+    _state: NoState,
+) -> HTTPResult<NoState> {
     log::trace!("New request: {}", req.uri().path());
-    Ok((req, resp))
+    Ok((req, resp, NoState {}))
 }
 
 async fn hello(
     req: Request<Body>,
     _resp: Option<Response<Body>>,
     params: Params,
-    _app: App<()>,
-) -> HTTPResult {
+    _app: App<(), NoState>,
+    _state: NoState,
+) -> HTTPResult<NoState> {
     let name = params.get("name").unwrap();
     log::info!("Saying hello to {}", name);
     let bytes = Body::from(format!("hello, {}!\n", name));
@@ -24,6 +26,7 @@ async fn hello(
     return Ok((
         req,
         Some(Response::builder().status(200).body(bytes).unwrap()),
+        NoState,
     ));
 }
 

@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use crate::{app::App, HTTPResult, PinBox};
+use crate::{app::App, HTTPResult, PinBox, TransientState};
 use async_recursion::async_recursion;
 
 use http::{Request, Response};
@@ -18,43 +18,46 @@ use hyper::Body;
 ///     req: Request<Body>,
 ///     _resp: Option<Response<Body>>,
 ///     params: Params,
-///     _app: App<()>,
-/// ) -> HTTPResult {
+///     _app: App<(), NoState>,
+///     _state: NoState,
+/// ) -> HTTPResult<NoState> {
 ///     let name = params.get("name").unwrap();
 ///     let bytes = Body::from(format!("hello, {}!\n", name));
 ///
 ///     return Ok((
 ///         req,
 ///         Some(Response::builder().status(200).body(bytes).unwrap()),
+///         NoState{},
 ///     ));
 /// }
 /// ```
 ///
-pub type HandlerFunc<S> = fn(
+pub type HandlerFunc<S, T> = fn(
     req: Request<Body>,
     response: Option<Response<Body>>,
     params: crate::Params,
-    app: App<S>,
-) -> PinBox<dyn Future<Output = HTTPResult> + Send>;
+    app: App<S, T>,
+    state: T,
+) -> PinBox<dyn Future<Output = HTTPResult<T>> + Send>;
 
 /// Handler is the structure of the handler. Typically, you will not use this directly, and instead
 /// interact with the [crate::compose_handler!] macro. That said, if you wanted to define your own
 /// macros or otherwise compose more complicated structures for your handlers, this is available to
 /// you.
 #[derive(Clone)]
-pub struct Handler<S: Clone + Send> {
-    handler: HandlerFunc<S>,
-    next: Box<Option<Handler<S>>>,
+pub struct Handler<S: Clone + Send, T: TransientState + 'static> {
+    handler: HandlerFunc<S, T>,
+    next: Box<Option<Handler<S, T>>>,
 }
 
-impl<S> Handler<S>
+impl<S: Clone + Send, T: TransientState> Handler<S, T>
 where
     Self: Send,
     S: Clone + Send,
 {
     /// Construct a new handler composed of a HandlerFunc with state, and an optional next handler
     /// in the chain.
-    pub fn new(handler: HandlerFunc<S>, next: Option<Handler<S>>) -> Self {
+    pub fn new(handler: HandlerFunc<S, T>, next: Option<Handler<S, T>>) -> Self {
         Self {
             handler,
             next: Box::new(next),
@@ -68,29 +71,34 @@ where
         req: Request<hyper::Body>,
         response: Option<Response<hyper::Body>>,
         params: crate::Params,
-        app: App<S>,
-    ) -> HTTPResult {
-        let (req, response) = (self.handler)(req, response, params.clone(), app.clone()).await?;
+        app: App<S, T>,
+        state: T,
+    ) -> HTTPResult<T> {
+        let (req, response, state) =
+            (self.handler)(req, response, params.clone(), app.clone(), state).await?;
         if self.next.is_some() {
             return Ok((*self.clone().next)
                 .unwrap()
-                .perform(req, response, params, app)
+                .perform(req, response, params, app, state)
                 .await?);
         }
 
-        Ok((req, response))
+        Ok((req, response, state))
     }
 }
 
 mod tests {
     #[tokio::test]
     async fn test_handler_basic() {
-        use crate::{app::App, Error, HTTPResult, Params};
+        use crate::{app::App, Error, HTTPResult, NoState, Params};
         use http::{HeaderValue, Request, Response, StatusCode};
         use hyper::Body;
 
         #[derive(Clone)]
         struct State;
+
+        #[derive(Clone)]
+        struct TransientState;
 
         // this method adds a header:
         // wakka: wakka wakka
@@ -99,11 +107,12 @@ mod tests {
             mut req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             let headers = req.headers_mut();
             headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
-            Ok((req, None))
+            Ok((req, None, NoState {}))
         }
 
         // this method returns an OK status when the wakka header exists.
@@ -111,22 +120,23 @@ mod tests {
             req: Request<Body>,
             mut response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             if let Some(header) = req.headers().get("wakka") {
                 if header != "wakka wakka" {
                     return Err(Error::new("invalid header value"));
                 }
 
                 if response.is_some() {
-                    return Ok((req, response));
+                    return Ok((req, response, NoState {}));
                 } else {
                     let resp = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::default())?;
                     response.replace(resp);
 
-                    return Ok((req, response));
+                    return Ok((req, response, NoState {}));
                 }
             }
 
@@ -135,12 +145,12 @@ mod tests {
 
         // single stage handler that never yields a response
         let bh = super::Handler::new(
-            |req, resp, params, app| Box::pin(one(req, resp, params, app)),
+            |req, resp, params, app, state| Box::pin(one(req, resp, params, app, state)),
             None,
         );
         let req = Request::default();
-        let (req, response) = bh
-            .perform(req, None, Params::new(), App::new())
+        let (req, response, _) = bh
+            .perform(req, None, Params::new(), App::new(), NoState {})
             .await
             .unwrap();
 
@@ -149,22 +159,28 @@ mod tests {
 
         // two-stage handler; yields a response if the first one was good.
         let bh_two = super::Handler::new(
-            |req, resp, params, app| Box::pin(two(req, resp, params, app)),
+            |req, resp, params, app, state| Box::pin(two(req, resp, params, app, state)),
             None,
         );
         let bh = super::Handler::new(
-            |req, resp, params, app| Box::pin(one(req, resp, params, app)),
+            |req, resp, params, app, state| Box::pin(one(req, resp, params, app, state)),
             Some(bh_two.clone()),
         );
-        let (_, response) = bh
-            .perform(req, None, Params::new(), App::new())
+        let (_, response, _) = bh
+            .perform(req, None, Params::new(), App::new(), NoState {})
             .await
             .unwrap();
 
         assert!(response.is_some() && response.unwrap().status() == StatusCode::OK);
 
         assert!(bh_two
-            .perform(Request::default(), None, Params::new(), App::new())
+            .perform(
+                Request::default(),
+                None,
+                Params::new(),
+                App::new(),
+                NoState {}
+            )
             .await
             .is_err());
 

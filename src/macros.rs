@@ -10,10 +10,10 @@ macro_rules! compose_handler {
         {
             use $crate::handler::{HandlerFunc, Handler};
             {
-                let mut funcs: Vec<HandlerFunc<_>> = Vec::new();
+                let mut funcs: Vec<HandlerFunc<_, _>> = Vec::new();
 
                 $(
-                    funcs.push(|req, resp, params, app| Box::pin($x(req, resp, params, app)));
+                    funcs.push(|req, resp, params, app, state| Box::pin($x(req, resp, params, app, state)));
                 )*
 
                 if funcs.len() == 0 {
@@ -22,7 +22,7 @@ macro_rules! compose_handler {
 
 
                 let mut handlers = Vec::new();
-                let mut last: Option<Handler<_>> = None;
+                let mut last: Option<Handler<_, _>> = None;
                 funcs.reverse();
 
                 for func in funcs {
@@ -42,7 +42,7 @@ mod tests {
         use http::{HeaderValue, Request, Response, StatusCode};
         use hyper::Body;
 
-        use crate::{app::App, Error, HTTPResult, Params};
+        use crate::{app::App, Error, HTTPResult, NoState, Params};
 
         #[derive(Clone)]
         struct State;
@@ -54,11 +54,12 @@ mod tests {
             mut req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             let headers = req.headers_mut();
             headers.insert("wakka", HeaderValue::from_str("wakka wakka").unwrap());
-            Ok((req, None))
+            Ok((req, None, NoState {}))
         }
 
         // this method returns an OK status when the wakka header exists.
@@ -66,22 +67,23 @@ mod tests {
             req: Request<Body>,
             mut response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             if let Some(header) = req.headers().get("wakka") {
                 if header != "wakka wakka" {
                     return Err(Error::new("invalid header value"));
                 }
 
                 if response.is_some() {
-                    return Ok((req, response));
+                    return Ok((req, response, NoState {}));
                 } else {
                     let resp = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::default())?;
                     response.replace(resp);
 
-                    return Ok((req, response));
+                    return Ok((req, response, NoState {}));
                 }
             }
 
@@ -90,8 +92,14 @@ mod tests {
 
         let handler = compose_handler!(one, two);
 
-        let (req, response) = handler
-            .perform(Request::default(), None, Params::new(), App::new())
+        let (req, response, _) = handler
+            .perform(
+                Request::default(),
+                None,
+                Params::new(),
+                App::new(),
+                NoState {},
+            )
             .await
             .unwrap();
 
@@ -100,8 +108,14 @@ mod tests {
 
         let handler = compose_handler!(one);
 
-        let (req, response) = handler
-            .perform(Request::default(), None, Params::new(), App::new())
+        let (req, response, _) = handler
+            .perform(
+                Request::default(),
+                None,
+                Params::new(),
+                App::new(),
+                NoState {},
+            )
             .await
             .unwrap();
 
@@ -111,7 +125,13 @@ mod tests {
         let handler = compose_handler!(two);
 
         assert!(handler
-            .perform(Request::default(), None, Params::new(), App::new())
+            .perform(
+                Request::default(),
+                None,
+                Params::new(),
+                App::new(),
+                NoState {}
+            )
             .await
             .is_err());
     }

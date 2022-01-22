@@ -1,30 +1,30 @@
 use http::{Request, Response};
 use hyper::Body;
 
-use crate::{app::App, handler::Handler, path::Path, Error, HTTPResult};
+use crate::{app::App, handler::Handler, path::Path, Error, HTTPResult, TransientState};
 
 #[derive(Clone)]
-pub(crate) struct Route<S: Clone + Send> {
+pub(crate) struct Route<S: Clone + Send, T: TransientState + 'static> {
     method: http::Method,
     path: Path,
-    handler: Handler<S>,
+    handler: Handler<S, T>,
 }
 
-impl<S: Clone + Send> PartialEq for Route<S> {
+impl<S: Clone + Send, T: TransientState> PartialEq for Route<S, T> {
     fn eq(&self, other: &Self) -> bool {
         self.method.to_string() == other.method.to_string() && self.path.eq(&other.path)
     }
 }
 
-impl<S: Clone + Send> Eq for Route<S> {}
+impl<S: Clone + Send, T: TransientState> Eq for Route<S, T> {}
 
-impl<S: Clone + Send> PartialOrd for Route<S> {
+impl<S: Clone + Send, T: TransientState> PartialOrd for Route<S, T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<S: Clone + Send> Ord for Route<S> {
+impl<S: Clone + Send, T: TransientState> Ord for Route<S, T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let left = self.method.to_string() + " " + &self.path.to_string();
         let right = other.method.to_string() + " " + &other.path.to_string();
@@ -33,8 +33,8 @@ impl<S: Clone + Send> Ord for Route<S> {
     }
 }
 
-impl<S: Clone + Send> Route<S> {
-    fn new(method: http::Method, path: String, handler: Handler<S>) -> Self {
+impl<S: Clone + Send, T: TransientState> Route<S, T> {
+    fn new(method: http::Method, path: String, handler: Handler<S, T>) -> Self {
         Self {
             method,
             handler,
@@ -46,27 +46,28 @@ impl<S: Clone + Send> Route<S> {
         &self,
         provided: String,
         req: Request<hyper::Body>,
-        app: App<S>,
-    ) -> HTTPResult {
+        app: App<S, T>,
+        state: T,
+    ) -> HTTPResult<T> {
         let params = self.path.extract(provided)?;
 
         if self.method != req.method() {
             return Err(Error::StatusCode(http::StatusCode::NOT_FOUND));
         }
 
-        self.handler.perform(req, None, params, app).await
+        self.handler.perform(req, None, params, app, state).await
     }
 }
 
 #[derive(Clone)]
-pub(crate) struct Router<S: Clone + Send>(Vec<Route<S>>);
+pub(crate) struct Router<S: Clone + Send, T: TransientState + 'static>(Vec<Route<S, T>>);
 
-impl<S: Clone + Send> Router<S> {
+impl<S: Clone + Send, T: TransientState + Clone + Send> Router<S, T> {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub(crate) fn add(&mut self, method: http::Method, path: String, ch: Handler<S>) -> Self {
+    pub(crate) fn add(&mut self, method: http::Method, path: String, ch: Handler<S, T>) -> Self {
         self.0.push(Route::new(method, path, ch));
         self.clone()
     }
@@ -74,13 +75,15 @@ impl<S: Clone + Send> Router<S> {
     pub(crate) async fn dispatch(
         &self,
         req: Request<Body>,
-        app: App<S>,
+        app: App<S, T>,
     ) -> Result<Response<Body>, Error> {
         let path = req.uri().path().to_string();
 
         for route in self.0.clone() {
             if route.path.matches(path.to_string()) && route.method.eq(req.method()) {
-                let (_, response) = route.dispatch(path.to_string(), req, app).await?;
+                let (_, response, _) = route
+                    .dispatch(path.to_string(), req, app, T::initial())
+                    .await?;
                 if response.is_none() {
                     return Err(Error::StatusCode(http::StatusCode::INTERNAL_SERVER_ERROR));
                 }
@@ -94,13 +97,12 @@ impl<S: Clone + Send> Router<S> {
 }
 
 mod tests {
-
     #[tokio::test]
     async fn test_route_dynamic() {
         use http::{Method, Request, Response};
         use hyper::Body;
 
-        use crate::{app::App, handler::Handler, HTTPResult, Params};
+        use crate::{app::App, handler::Handler, HTTPResult, NoState, Params};
 
         use super::Route;
 
@@ -111,14 +113,16 @@ mod tests {
             req: Request<Body>,
             _response: Option<Response<Body>>,
             params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             return Ok((
                 req,
                 Some(Response::builder().status(400).body(Body::from(format!(
                     "hello, {}",
                     *params.get("name").unwrap()
                 )))?),
+                NoState {},
             ));
         }
 
@@ -126,13 +130,15 @@ mod tests {
             Method::GET,
             "/a/:name/c".to_string(),
             Handler::new(
-                |req, resp, params, app| Box::pin(handler_dynamic(req, resp, params, app)),
+                |req, resp, params, app, state| {
+                    Box::pin(handler_dynamic(req, resp, params, app, state))
+                },
                 None,
             ),
         );
 
         assert!(route
-            .dispatch("/a".to_string(), Request::default(), App::new())
+            .dispatch("/a".to_string(), Request::default(), App::new(), NoState {})
             .await
             .is_err());
         assert!(route
@@ -143,6 +149,7 @@ mod tests {
                     .body(Body::from("one=two".as_bytes()))
                     .unwrap(),
                 App::new(),
+                NoState {},
             )
             .await
             .is_err());
@@ -151,7 +158,12 @@ mod tests {
             "erik", "adam", "sean", "travis", "joseph", "grant", "joy", "steve", "marc",
         ] {
             assert!(route
-                .dispatch("/a/:name/c".to_string(), Request::default(), App::new())
+                .dispatch(
+                    "/a/:name/c".to_string(),
+                    Request::default(),
+                    App::new(),
+                    NoState {}
+                )
                 .await
                 .is_ok());
 
@@ -159,7 +171,7 @@ mod tests {
 
             let body = hyper::body::to_bytes(
                 route
-                    .dispatch(path.clone(), Request::default(), App::new())
+                    .dispatch(path.clone(), Request::default(), App::new(), NoState {})
                     .await
                     .unwrap()
                     .1
@@ -172,7 +184,7 @@ mod tests {
             assert_eq!(body, format!("hello, {}", name).as_bytes());
 
             let status = route
-                .dispatch(path, Request::default(), App::new())
+                .dispatch(path, Request::default(), App::new(), NoState {})
                 .await
                 .unwrap()
                 .1
@@ -188,7 +200,7 @@ mod tests {
         use http::{Method, Request, Response};
         use hyper::Body;
 
-        use crate::{app::App, handler::Handler, HTTPResult, Params};
+        use crate::{app::App, handler::Handler, HTTPResult, NoState, Params};
 
         use super::Route;
 
@@ -199,8 +211,9 @@ mod tests {
             req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             return Ok((
                 req,
                 Some(
@@ -208,6 +221,7 @@ mod tests {
                         .status(400)
                         .body(Body::from("hello, world".as_bytes()))?,
                 ),
+                NoState {},
             ));
         }
 
@@ -215,13 +229,15 @@ mod tests {
             Method::GET,
             "/a/b/c".to_string(),
             Handler::new(
-                |req, resp, params, app| Box::pin(handler_static(req, resp, params, app)),
+                |req, resp, params, app, state| {
+                    Box::pin(handler_static(req, resp, params, app, state))
+                },
                 None,
             ),
         );
 
         assert!(route
-            .dispatch("/a".to_string(), Request::default(), App::new())
+            .dispatch("/a".to_string(), Request::default(), App::new(), NoState {})
             .await
             .is_err());
         assert!(route
@@ -232,18 +248,29 @@ mod tests {
                     .body(Body::from("one=two".as_bytes()))
                     .unwrap(),
                 App::new(),
+                NoState {},
             )
             .await
             .is_err());
 
         assert!(route
-            .dispatch("/a/b/c".to_string(), Request::default(), App::new())
+            .dispatch(
+                "/a/b/c".to_string(),
+                Request::default(),
+                App::new(),
+                NoState {}
+            )
             .await
             .is_ok());
 
         let body = hyper::body::to_bytes(
             route
-                .dispatch("/a/b/c".to_string(), Request::default(), App::new())
+                .dispatch(
+                    "/a/b/c".to_string(),
+                    Request::default(),
+                    App::new(),
+                    NoState {},
+                )
                 .await
                 .unwrap()
                 .1
@@ -256,7 +283,12 @@ mod tests {
         assert_eq!(body, "hello, world".as_bytes());
 
         let status = route
-            .dispatch("/a/b/c".to_string(), Request::default(), App::new())
+            .dispatch(
+                "/a/b/c".to_string(),
+                Request::default(),
+                App::new(),
+                NoState {},
+            )
             .await
             .unwrap()
             .1
@@ -269,7 +301,7 @@ mod tests {
     #[tokio::test]
     async fn test_router() {
         use super::Router;
-        use crate::{app::App, handler::Handler, HTTPResult, Params};
+        use crate::{app::App, handler::Handler, HTTPResult, NoState, Params};
         use http::{Method, Request, Response};
         use hyper::Body;
 
@@ -280,14 +312,16 @@ mod tests {
             req: Request<Body>,
             _response: Option<Response<Body>>,
             params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             return Ok((
                 req,
                 Some(Response::builder().status(400).body(Body::from(format!(
                     "hello, {}",
                     *params.get("name").unwrap()
                 )))?),
+                NoState {},
             ));
         }
 
@@ -295,8 +329,9 @@ mod tests {
             req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State>,
-        ) -> HTTPResult {
+            _app: App<State, NoState>,
+            _state: NoState,
+        ) -> HTTPResult<NoState> {
             return Ok((
                 req,
                 Some(
@@ -304,6 +339,7 @@ mod tests {
                         .status(400)
                         .body(Body::from("hello, world".as_bytes()))?,
                 ),
+                NoState {},
             ));
         }
 
@@ -313,7 +349,9 @@ mod tests {
             Method::GET,
             "/a/b/c".to_string(),
             Handler::new(
-                |req, resp, params, app| Box::pin(handler_static(req, resp, params, app)),
+                |req, resp, params, app, state| {
+                    Box::pin(handler_static(req, resp, params, app, state))
+                },
                 None,
             ),
         );
@@ -322,7 +360,9 @@ mod tests {
             Method::GET,
             "/c/b/a/:name".to_string(),
             Handler::new(
-                |req, resp, params, app| Box::pin(handler_dynamic(req, resp, params, app)),
+                |req, resp, params, app, state| {
+                    Box::pin(handler_dynamic(req, resp, params, app, state))
+                },
                 None,
             ),
         );

@@ -74,7 +74,34 @@ where
 /// returned. If you wish to return Err(), a [http::StatusCode] or [std::string::String] can be
 /// returned, the former is resolved to its status with an empty body, and the latter corresponds
 /// to a 500 Internal Server Error with the body set to the string.
-pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>>), Error>;
+pub type HTTPResult<TransientState> = Result<
+    (
+        Request<hyper::Body>,
+        Option<Response<hyper::Body>>,
+        TransientState,
+    ),
+    Error,
+>;
+
+/// TransientState must be implemented to use state between handlers.
+pub trait TransientState
+where
+    Self: Clone + Send,
+{
+    /// initial prescribes an initial state for the trait, allowing it to be constructed at
+    /// dispatch time.
+    fn initial() -> Self;
+}
+
+/// NoState is an empty [crate::TransientState].
+#[derive(Clone)]
+pub struct NoState;
+
+impl TransientState for NoState {
+    fn initial() -> Self {
+        Self {}
+    }
+}
 
 /// A convenience import to gather all of `ratpack`'s dependencies in one easy place.
 /// To use:
@@ -83,7 +110,9 @@ pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>
 ///     use ratpack::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{app::App, compose_handler, Error, HTTPResult, Params, ServerError};
+    pub use crate::{
+        app::App, compose_handler, Error, HTTPResult, NoState, Params, ServerError, TransientState,
+    };
     pub use http::{Request, Response, StatusCode};
     pub use hyper::Body;
 }
