@@ -6,9 +6,6 @@ description = "ratpack is a HTTP framework designed around simplicity and ease-o
 authors = ["Erik Hollensbe <erik.hollensbe@zerotier.com>", "Adam Ierymenko <adam.ierymenko@zerotier.com>"]
 license = "BSD-3-Clause"
 
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 hyper = { version = "^0.14", features = [ "http1", "http2", "server", "runtime", "tcp", "stream" ] }
 http = "^0.2"
