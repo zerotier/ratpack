@@ -73,3 +73,7 @@ where
 /// with [std::option::Option::None] as the [http::Response], a 500 Internal Server Error will be
 /// returned.
 pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>>), Error>;
+
+pub mod prelude {
+    pub use crate::{app::App, compose_handler, Error, HTTPResult, Params, ServerError};
+}
