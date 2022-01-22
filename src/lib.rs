@@ -74,6 +74,14 @@ where
 /// returned.
 pub type HTTPResult = Result<(Request<hyper::Body>, Option<Response<hyper::Body>>), Error>;
 
+/// A convenience import to gather all of `ratpack`'s dependencies in one easy place.
+/// To use:
+///
+/// ```
+///     use ratpack::prelude::*;
+/// ```
 pub mod prelude {
     pub use crate::{app::App, compose_handler, Error, HTTPResult, Params, ServerError};
+    pub use http::{Request, Response, StatusCode};
+    pub use hyper::Body;
 }

@@ -44,7 +44,7 @@ use crate::{handler::Handler, router::Router, Error, ServerError};
 /// with `:`. For example, `/a/b/c` will always only match one route, while `/a/:b/c` will match
 /// any route with `/a/<anything>/c`.
 ///
-/// Variadic path components are accessible through the [Params] implementation. Paths are
+/// Variadic path components are accessible through the [crate::Params] implementation. Paths are
 /// typically used through [crate::app::App] methods that use a string form of the Path.
 ///
 #[derive(Clone)]
@@ -81,55 +81,55 @@ impl<S: 'static + Clone + Send> App<S> {
         self.global_state.clone()
     }
 
-    /// Create a route for a GET request. See [crate::path::Path] and [crate::handler::Handler] for
+    /// Create a route for a GET request. See App's docs and [crate::handler::Handler] for
     /// more information.
     pub fn get(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::GET, path.to_string(), ch);
     }
 
-    /// Create a route for a POST request. See [crate::path::Path] and [crate::handler::Handler] for
+    /// Create a route for a POST request. See App's docs and [crate::handler::Handler] for
     /// more information.
     pub fn post(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::POST, path.to_string(), ch);
     }
 
-    /// Create a route for a DELETE request. See [crate::path::Path] and [crate::handler::Handler] for
+    /// Create a route for a DELETE request. See App's docs and [crate::handler::Handler] for
     /// more information.
     pub fn delete(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::DELETE, path.to_string(), ch);
     }
 
-    /// Create a route for a PUT request. See [crate::path::Path] and [crate::handler::Handler] for
+    /// Create a route for a PUT request. See App's docs and [crate::handler::Handler] for
     /// more information.
     pub fn put(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::PUT, path.to_string(), ch);
     }
 
-    /// Create a route for an OPTIONS request. See [crate::path::Path] and
+    /// Create a route for an OPTIONS request. See App's docs and
     /// [crate::handler::Handler] for more information.
     pub fn options(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::OPTIONS, path.to_string(), ch);
     }
 
-    /// Create a route for a PATCH request. See [crate::path::Path] and
+    /// Create a route for a PATCH request. See App's docs and
     /// [crate::handler::Handler] for more information.
     pub fn patch(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::PATCH, path.to_string(), ch);
     }
 
-    /// Create a route for a HEAD request. See [crate::path::Path] and
+    /// Create a route for a HEAD request. See App's docs and
     /// [crate::handler::Handler] for more information.
     pub fn head(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::HEAD, path.to_string(), ch);
     }
 
-    /// Create a route for a CONNECT request. See [crate::path::Path] and
+    /// Create a route for a CONNECT request. See App's docs and
     /// [crate::handler::Handler] for more information.
     pub fn connect(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::CONNECT, path.to_string(), ch);
     }
 
-    /// Create a route for a TRACE request. See [crate::path::Path] and
+    /// Create a route for a TRACE request. See App's docs and
     /// [crate::handler::Handler] for more information.
     pub fn trace(&mut self, path: &str, ch: Handler<S>) {
         self.router.add(Method::TRACE, path.to_string(), ch);

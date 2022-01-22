@@ -6,6 +6,8 @@ use async_recursion::async_recursion;
 use http::{Request, Response};
 use hyper::Body;
 
+/// HandlerFunc is the type signature of all handlers. All handlers must conform to this pattern to
+/// be used with `compose_handler!`.
 pub type HandlerFunc<S> = fn(
     req: Request<Body>,
     response: Option<Response<Body>>,
