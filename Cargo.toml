@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyper = { version = "*", features = [ "http1", "http2", "server", "runtime", "tcp", "stream" ] }
-http = "*"
-async-recursion = "*"
-tokio = { version = "*", features = [ "full" ] }
+hyper = { version = "^0.14", features = [ "http1", "http2", "server", "runtime", "tcp", "stream" ] }
+http = "^0.2"
+async-recursion = "^1"
+tokio = { version = "^1", features = [ "full" ] }
 
 [dev-dependencies]
-log = "*"
-env_logger = "*"
+log = "^0.4"
+env_logger = "^0.9"
