@@ -1,7 +1,7 @@
 use http::{Request, Response};
 use hyper::Body;
 use log::LevelFilter;
-use ratpack::{app::App, compose_handler, handler::Params, HTTPResult, ServerError};
+use ratpack::{app::App, compose_handler, HTTPResult, Params, ServerError};
 
 async fn log(
     req: Request<Body>,

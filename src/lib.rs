@@ -5,12 +5,15 @@ pub mod handler;
 /// Macros for quality-of-life when interacting with Handlers
 pub mod macros;
 /// Path management for Routes
-pub mod path;
+pub(crate) mod path;
 /// Router, Route management and organization
-pub mod router;
+pub(crate) mod router;
 
 use http::{Request, Response};
-use std::pin::Pin;
+use std::{collections::BTreeMap, pin::Pin};
+
+/// Params are a mapping of name -> parameter for the purposes of routing.
+pub type Params = BTreeMap<String, String>;
 
 pub(crate) type PinBox<F> = Pin<Box<F>>;
 

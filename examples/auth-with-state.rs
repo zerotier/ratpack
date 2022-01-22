@@ -1,6 +1,6 @@
 use http::{Request, Response, StatusCode};
 use hyper::Body;
-use ratpack::{app::App, compose_handler, handler::Params, Error, HTTPResult, ServerError};
+use ratpack::{app::App, compose_handler, Error, HTTPResult, Params, ServerError};
 
 async fn validate_authtoken(
     req: Request<Body>,

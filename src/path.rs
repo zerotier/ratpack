@@ -1,14 +1,14 @@
-use crate::{handler::Params, Error};
+use crate::{Error, Params};
 
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
-pub enum RoutePart {
+pub(crate) enum RoutePart {
     PathComponent(String),
     Param(String),
     Leader,
 }
 
 #[derive(Debug, Clone, PartialOrd)]
-pub struct Path(Vec<RoutePart>);
+pub(crate) struct Path(Vec<RoutePart>);
 
 impl Eq for Path {}
 
@@ -45,7 +45,9 @@ impl Path {
         self.clone()
     }
 
-    pub fn params(&self) -> Vec<String> {
+    /// This method lists all the params available to the path; useful for debugging.
+    #[allow(dead_code)]
+    pub(crate) fn params(&self) -> Vec<String> {
         let mut params = Vec::new();
         for arg in self.0.clone() {
             match arg {

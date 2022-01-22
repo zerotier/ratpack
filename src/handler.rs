@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, future::Future};
+use std::future::Future;
 
 use crate::{app::App, HTTPResult, PinBox};
 use async_recursion::async_recursion;
@@ -6,12 +6,10 @@ use async_recursion::async_recursion;
 use http::{Request, Response};
 use hyper::Body;
 
-pub type Params = BTreeMap<String, String>;
-
 pub type HandlerFunc<S> = fn(
     req: Request<Body>,
     response: Option<Response<Body>>,
-    params: Params,
+    params: crate::Params,
     app: App<S>,
 ) -> PinBox<dyn Future<Output = HTTPResult> + Send>;
 
@@ -38,7 +36,7 @@ where
         &self,
         req: Request<hyper::Body>,
         response: Option<Response<hyper::Body>>,
-        params: Params,
+        params: crate::Params,
         app: App<S>,
     ) -> HTTPResult {
         let (req, response) = (self.handler)(req, response, params.clone(), app.clone()).await?;
@@ -56,11 +54,9 @@ where
 mod tests {
     #[tokio::test]
     async fn test_handler_basic() {
-        use crate::{app::App, Error, HTTPResult};
+        use crate::{app::App, Error, HTTPResult, Params};
         use http::{HeaderValue, Request, Response, StatusCode};
         use hyper::Body;
-
-        use super::Params;
 
         #[derive(Clone)]
         struct State;

@@ -1,6 +1,6 @@
 use http::{Request, Response, StatusCode};
 use hyper::Body;
-use ratpack::{app::App, compose_handler, handler::Params, Error, HTTPResult, ServerError};
+use ratpack::{app::App, compose_handler, Error, HTTPResult, Params, ServerError};
 
 const DEFAULT_AUTHTOKEN: &str = "867-5309";
 const AUTHTOKEN_FILENAME: &str = "authtoken.secret";

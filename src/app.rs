@@ -37,6 +37,16 @@ use crate::{handler::Handler, router::Router, Error, ServerError};
 /// look at the `with_state` method which will change the type signature of the `item` call (and
 /// other handlers).
 ///
+/// App routes take a Path: a Path is a URI path component that has the capability to superimpose
+/// variables. Paths are really simple but useful for capturing dynamic parts of a routing path.
+///
+/// Paths should always start with `/`. Paths that are dynamic have member components that start
+/// with `:`. For example, `/a/b/c` will always only match one route, while `/a/:b/c` will match
+/// any route with `/a/<anything>/c`.
+///
+/// Variadic path components are accessible through the [Params] implementation. Paths are
+/// typically used through [crate::app::App] methods that use a string form of the Path.
+///
 #[derive(Clone)]
 pub struct App<S: Clone + Send> {
     router: Router<S>,

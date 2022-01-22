@@ -4,7 +4,7 @@ use hyper::Body;
 use crate::{app::App, handler::Handler, path::Path, Error, HTTPResult};
 
 #[derive(Clone)]
-pub struct Route<S: Clone + Send> {
+pub(crate) struct Route<S: Clone + Send> {
     method: http::Method,
     path: Path,
     handler: Handler<S>,
@@ -59,7 +59,7 @@ impl<S: Clone + Send> Route<S> {
 }
 
 #[derive(Clone)]
-pub struct Router<S: Clone + Send>(Vec<Route<S>>);
+pub(crate) struct Router<S: Clone + Send>(Vec<Route<S>>);
 
 impl<S: Clone + Send> Router<S> {
     pub fn new() -> Self {
@@ -100,11 +100,7 @@ mod tests {
         use http::{Method, Request, Response};
         use hyper::Body;
 
-        use crate::{
-            app::App,
-            handler::{Handler, Params},
-            HTTPResult,
-        };
+        use crate::{app::App, handler::Handler, HTTPResult, Params};
 
         use super::Route;
 
@@ -192,11 +188,7 @@ mod tests {
         use http::{Method, Request, Response};
         use hyper::Body;
 
-        use crate::{
-            app::App,
-            handler::{Handler, Params},
-            HTTPResult,
-        };
+        use crate::{app::App, handler::Handler, HTTPResult, Params};
 
         use super::Route;
 
@@ -277,11 +269,7 @@ mod tests {
     #[tokio::test]
     async fn test_router() {
         use super::Router;
-        use crate::{
-            app::App,
-            handler::{Handler, Params},
-            HTTPResult,
-        };
+        use crate::{app::App, handler::Handler, HTTPResult, Params};
         use http::{Method, Request, Response};
         use hyper::Body;
 
