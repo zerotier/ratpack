@@ -20,7 +20,7 @@ Here is an example which carries global _application state_ as an authentication
 use ratpack::prelude::*;
 
 // We'll use authstate to (optionally) capture information about the token
-// being correct. if it is Some(true), tehe user was authed, if None, there was no
+// being correct. if it is Some(true), the user was authed, if None, there was no
 // authentication performed.
 #[derive(Clone)]
 struct AuthedState {
