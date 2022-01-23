@@ -1,12 +1,23 @@
 use ratpack::prelude::*;
 
+#[derive(Clone)]
+struct AuthedState {
+    authed: Option<bool>,
+}
+
+impl TransientState for AuthedState {
+    fn initial() -> Self {
+        Self { authed: None }
+    }
+}
+
 async fn validate_authtoken(
     req: Request<Body>,
     resp: Option<Response<Body>>,
     _params: Params,
-    app: App<State, NoState>,
-    _state: NoState,
-) -> HTTPResult<NoState> {
+    app: App<State, AuthedState>,
+    mut authstate: AuthedState,
+) -> HTTPResult<AuthedState> {
     let token = req.headers().get("X-AuthToken");
     if token.is_none() {
         return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
@@ -20,28 +31,29 @@ async fn validate_authtoken(
     }
 
     let state = state.unwrap();
+    authstate.authed = Some(state.clone().lock().await.authtoken == token);
 
-    if !(state.clone().lock().await.authtoken == token) {
-        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
-    }
-
-    return Ok((req, resp, NoState {}));
+    return Ok((req, resp, authstate));
 }
 
 async fn hello(
     req: Request<Body>,
     _resp: Option<Response<Body>>,
     params: Params,
-    _app: App<State, NoState>,
-    _state: NoState,
-) -> HTTPResult<NoState> {
+    _app: App<State, AuthedState>,
+    authstate: AuthedState,
+) -> HTTPResult<AuthedState> {
+    if authstate.authed.is_some() && !authstate.authed.unwrap() {
+        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
+    }
+
     let name = params.get("name").unwrap();
     let bytes = Body::from(format!("hello, {}!\n", name));
 
     return Ok((
         req,
         Some(Response::builder().status(200).body(bytes).unwrap()),
-        NoState {},
+        authstate,
     ));
 }
 

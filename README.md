@@ -19,6 +19,22 @@ Here is an example which carries global _application state_ as an authentication
 ```rust
 use ratpack::prelude::*;
 
+// We'll use authstate to (optionally) capture information about the token
+// being correct. if it is Some(true), tehe user was authed, if None, there was no
+// authentication performed.
+#[derive(Clone)]
+struct AuthedState {
+    authed: Option<bool>,
+}
+
+// All transient state structs must have an initial state, which will be
+// initialized internally in the router.
+impl TransientState for AuthedState {
+    fn initial() -> Self {
+        Self { authed: None }
+    }
+}
+
 // our authtoken validator, this queries the app state and the header
 // `X-AuthToken` and compares the two. If there are any discrepancies, it
 // returns `401 Unauthorized`.
@@ -30,8 +46,9 @@ async fn validate_authtoken(
     req: Request<Body>,
     resp: Option<Response<Body>>,
     _params: Params,
-    app: App<State>,
-) -> HTTPResult {
+    app: App<State, AuthedState>,
+    mut authstate: AuthedState,
+) -> HTTPResult<AuthedState> {
     let token = req.headers().get("X-AuthToken");
     if token.is_none() {
         return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
@@ -45,12 +62,9 @@ async fn validate_authtoken(
     }
 
     let state = state.unwrap();
+    authstate.authed = Some(state.clone().lock().await.authtoken == token);
 
-    if !(state.clone().lock().await.authtoken == token) {
-        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
-    }
-
-    return Ok((req, resp));
+    return Ok((req, resp, authstate));
 }
 
 // our `hello` responder; it simply echoes the `name` parameter provided in the
@@ -59,14 +73,20 @@ async fn hello(
     req: Request<Body>,
     _resp: Option<Response<Body>>,
     params: Params,
-    _app: App<State>,
-) -> HTTPResult {
+    _app: App<State, AuthedState>,
+    authstate: AuthedState,
+) -> HTTPResult<AuthedState> {
+    if authstate.authed.is_some() && !authstate.authed.unwrap() {
+        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
+    }
+
     let name = params.get("name").unwrap();
     let bytes = Body::from(format!("hello, {}!\n", name));
 
     return Ok((
         req,
         Some(Response::builder().status(200).body(bytes).unwrap()),
+        authstate,
     ));
 }
 
@@ -80,18 +100,12 @@ struct State {
 // ratpack.
 #[tokio::main]
 async fn main() -> Result<(), ServerError> {
-    // our state is passed through the `with_state` constructor method.
     let mut app = App::with_state(State {
         authtoken: "867-5309",
     });
-
-    // this is the authenticated endpoint; compose_handler! here is used to create a two-stage pipeline.
     app.get("/auth/:name", compose_handler!(validate_authtoken, hello));
-
-    // this is the unauthenticated endpoint, only `hello` is used here.
     app.get("/:name", compose_handler!(hello));
 
-    // This inits the server and waits for connections.
     app.serve("127.0.0.1:3000").await?;
 
     Ok(())
