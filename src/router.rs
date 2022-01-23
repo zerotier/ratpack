@@ -301,9 +301,22 @@ mod tests {
     #[tokio::test]
     async fn test_router() {
         use super::Router;
-        use crate::{app::App, handler::Handler, HTTPResult, NoState, Params};
+        use crate::{
+            app::App, compose_handler, handler::Handler, HTTPResult, Params, TransientState,
+        };
         use http::{Method, Request, Response};
         use hyper::Body;
+
+        #[derive(Clone)]
+        struct HelloState {
+            name: Option<String>,
+        }
+
+        impl TransientState for HelloState {
+            fn initial() -> Self {
+                Self { name: None }
+            }
+        }
 
         #[derive(Clone)]
         struct State;
@@ -312,16 +325,46 @@ mod tests {
             req: Request<Body>,
             _response: Option<Response<Body>>,
             params: Params,
-            _app: App<State, NoState>,
-            _state: NoState,
-        ) -> HTTPResult<NoState> {
+            _app: App<State, HelloState>,
+            mut state: HelloState,
+        ) -> HTTPResult<HelloState> {
+            let name = params.get("name").unwrap().clone();
+            state.name = Some(name.clone());
+
             return Ok((
                 req,
-                Some(Response::builder().status(400).body(Body::from(format!(
-                    "hello, {}",
-                    *params.get("name").unwrap()
-                )))?),
-                NoState {},
+                Some(
+                    Response::builder()
+                        .status(200)
+                        .body(Body::from(format!(
+                            "hello, {}",
+                            state.clone().name.unwrap()
+                        )))
+                        .unwrap(),
+                ),
+                state,
+            ));
+        }
+
+        async fn handler_continued(
+            req: Request<Body>,
+            _response: Option<Response<Body>>,
+            _params: Params,
+            _app: App<State, HelloState>,
+            state: HelloState,
+        ) -> HTTPResult<HelloState> {
+            return Ok((
+                req,
+                Some(
+                    Response::builder()
+                        .status(200)
+                        .body(Body::from(format!(
+                            "hello, {}",
+                            state.clone().name.unwrap()
+                        )))
+                        .unwrap(),
+                ),
+                state,
             ));
         }
 
@@ -329,9 +372,9 @@ mod tests {
             req: Request<Body>,
             _response: Option<Response<Body>>,
             _params: Params,
-            _app: App<State, NoState>,
-            _state: NoState,
-        ) -> HTTPResult<NoState> {
+            _app: App<State, HelloState>,
+            _state: HelloState,
+        ) -> HTTPResult<HelloState> {
             return Ok((
                 req,
                 Some(
@@ -339,7 +382,7 @@ mod tests {
                         .status(400)
                         .body(Body::from("hello, world".as_bytes()))?,
                 ),
-                NoState {},
+                HelloState::initial(),
             ));
         }
 
@@ -365,6 +408,12 @@ mod tests {
                 },
                 None,
             ),
+        );
+
+        router.add(
+            Method::GET,
+            "/with_state/:name".to_string(),
+            compose_handler!(handler_dynamic, handler_continued),
         );
 
         let response = router
@@ -395,6 +444,22 @@ mod tests {
                     App::new(),
                 )
                 .await;
+            assert!(response.is_ok());
+
+            let body = hyper::body::to_bytes(response.unwrap()).await.unwrap();
+            assert_eq!(body, format!("hello, {}", name).as_bytes());
+
+            let response = router
+                .dispatch(
+                    Request::builder()
+                        .uri(&format!("/with_state/{}", name))
+                        .method(Method::GET)
+                        .body(Body::default())
+                        .unwrap(),
+                    App::new(),
+                )
+                .await;
+
             assert!(response.is_ok());
 
             let body = hyper::body::to_bytes(response.unwrap()).await.unwrap();
