@@ -21,6 +21,9 @@ impl Ord for Path {
 impl Path {
     pub(crate) fn new(path: String) -> Self {
         let mut parts = Self::default();
+
+        let path = path.trim_end_matches("/");
+
         if !path.contains("/") {
             return Self::default();
         }
@@ -64,7 +67,9 @@ impl Path {
     }
 
     pub(crate) fn extract(&self, provided: String) -> Result<Params, Error> {
-        if (provided == "" || provided == "/") && self.eq(&Self::default()) {
+        let provided = provided.trim_end_matches("/");
+
+        if provided == "" && self.eq(&Self::default()) {
             return Ok(Params::default());
         }
 
@@ -210,6 +215,11 @@ mod tests {
         assert_eq!(
             Path::new("/".to_string()).extract("/".to_string()).unwrap(),
             Params::default()
+        );
+
+        assert_eq!(
+            Path::new("/account/".to_string()),
+            Path::new("/account".to_string())
         );
 
         assert_eq!(Path::default().to_string(), "/".to_string());
