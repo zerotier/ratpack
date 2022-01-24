@@ -21,8 +21,13 @@ impl Ord for Path {
 impl Path {
     pub(crate) fn new(path: String) -> Self {
         let mut parts = Self::default();
+        if !path.contains("/") {
+            return Self::default();
+        }
 
-        for arg in path.split("/") {
+        let args = path.split("/");
+
+        for arg in args {
             if arg.starts_with(":") {
                 // is param
                 parts.push(RoutePart::Param(arg.trim_start_matches(":").to_string()));
@@ -30,7 +35,6 @@ impl Path {
                 // skip empties. this will push additional leaders if there is an duplicate slash
                 // (e.g.: `//one/two`), which will fail on matching; we don't want to support this
                 // syntax in the router.
-                parts.push(RoutePart::Leader);
             } else {
                 // is not param
                 parts.push(RoutePart::PathComponent(arg.to_string()));
@@ -134,7 +138,7 @@ impl PartialEq for Path {
 
 impl Default for Path {
     fn default() -> Self {
-        Self(Vec::new())
+        Self(vec![RoutePart::Leader])
     }
 }
 
@@ -168,7 +172,7 @@ mod tests {
 
         let path = Path::new("/abc/def/ghi".to_string());
         assert!(path.matches("/abc/def/ghi".to_string()));
-        assert!(!path.matches("//abc/def/ghi".to_string()));
+        assert!(path.matches("//abc/def/ghi".to_string()));
         assert!(!path.matches("/def/ghi".to_string()));
         assert!(path.params().is_empty());
 
@@ -198,5 +202,8 @@ mod tests {
         );
 
         assert_eq!(Path::default().to_string(), "/".to_string());
+
+        let path = Path::new("/".to_string());
+        assert!(path.matches("/".to_string()));
     }
 }
