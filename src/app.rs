@@ -147,9 +147,9 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                     .status(sc)
                     .body(Body::default())
                     .unwrap()),
-                Error::InternalServerError(_) => Ok(Response::builder()
+                Error::InternalServerError(e) => Ok(Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::default())
+                    .body(Body::from(e.to_string()))
                     .unwrap()),
             },
         }

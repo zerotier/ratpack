@@ -64,11 +64,16 @@ impl Path {
     }
 
     pub(crate) fn extract(&self, provided: String) -> Result<Params, Error> {
+        if (provided == "" || provided == "/") && self.eq(&Self::default()) {
+            return Ok(Params::default());
+        }
+
+        let mut params = Params::default();
+
         let parts: Vec<String> = provided
             .split("/")
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
-        let mut params = Params::default();
 
         if parts.len() != self.0.len() {
             return Err(Error::new("invalid parameters"));
@@ -168,6 +173,7 @@ mod tests {
     #[test]
     fn test_path() {
         use super::Path;
+        use crate::Params;
         use std::collections::BTreeMap;
 
         let path = Path::new("/abc/def/ghi".to_string());
@@ -199,6 +205,11 @@ mod tests {
         assert_eq!(
             Path::new("/abc/:wooble/:wakka/jkl".to_string()).to_string(),
             "/abc/:wooble/:wakka/jkl".to_string()
+        );
+
+        assert_eq!(
+            Path::new("/".to_string()).extract("/".to_string()).unwrap(),
+            Params::default()
         );
 
         assert_eq!(Path::default().to_string(), "/".to_string());
