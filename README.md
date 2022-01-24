@@ -133,7 +133,7 @@ hello, erik!
 
 ## More information & documentation
 
-For more information, see the [docs](#) (link TBD on release).
+For more information, see the [docs](https://docs.rs/ratpack/latest/ratpack/).
 
 ## Author
 
