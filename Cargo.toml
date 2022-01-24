@@ -5,6 +5,8 @@ edition = "2018"
 description = "ratpack is a HTTP framework designed around simplicity and ease-of-use"
 authors = ["Erik Hollensbe <erik.hollensbe@zerotier.com>", "Adam Ierymenko <adam.ierymenko@zerotier.com>"]
 license = "BSD-3-Clause"
+homepage = "https://github.com/zerotier/ratpack"
+repository = "https://github.com/zerotier/ratpack"
 
 [dependencies]
 hyper = { version = "^0.14", features = [ "http1", "http2", "server", "runtime", "tcp", "stream" ] }
