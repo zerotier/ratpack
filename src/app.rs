@@ -1,6 +1,6 @@
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
-use http::{Method, Request, Response, StatusCode};
+use http::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper::{server::conn::Http, service::service_fn, Body};
 use tokio::{net::TcpListener, sync::Mutex};
 
@@ -178,5 +178,138 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 }
             });
         }
+    }
+}
+
+pub struct TestService<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> {
+    app: App<S, T>,
+    headers: Option<HeaderMap>,
+}
+
+impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> TestService<S, T> {
+    pub fn new(app: App<S, T>) -> Self {
+        Self { app, headers: None }
+    }
+
+    pub fn with_headers(&self, headers: http::HeaderMap) -> Self {
+        Self {
+            app: self.app.clone(),
+            headers: Some(headers),
+        }
+    }
+
+    pub async fn dispatch(&self, req: Request<Body>) -> Response<Body> {
+        self.app.dispatch(req).await.unwrap()
+    }
+
+    fn populate_headers(&self, mut req: http::request::Builder) -> http::request::Builder {
+        if let Some(include_headers) = self.headers.clone() {
+            for (header, value) in include_headers.clone() {
+                if let Some(header) = header {
+                    req = req.header(header, value.clone());
+                }
+            }
+        }
+
+        req
+    }
+
+    pub async fn get(&self, path: &str) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+
+        self.app
+            .dispatch(req.uri(path).body(Body::default()).unwrap())
+            .await
+            .unwrap()
+    }
+
+    pub async fn post(&self, path: &str, body: Body) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+
+        self.app
+            .dispatch(req.method(Method::POST).uri(path).body(body).unwrap())
+            .await
+            .unwrap()
+    }
+
+    pub async fn delete(&self, path: &str) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(
+                req.method(Method::DELETE)
+                    .uri(path)
+                    .body(Body::default())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    pub async fn put(&self, path: &str, body: Body) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(req.method(Method::PUT).uri(path).body(body).unwrap())
+            .await
+            .unwrap()
+    }
+
+    pub async fn options(&self, path: &str) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(
+                req.method(Method::OPTIONS)
+                    .uri(path)
+                    .body(Body::default())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    pub async fn patch(&self, path: &str, body: Body) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(req.method(Method::PATCH).uri(path).body(body).unwrap())
+            .await
+            .unwrap()
+    }
+
+    pub async fn head(&self, path: &str) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(
+                req.method(Method::HEAD)
+                    .uri(path)
+                    .body(Body::default())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    pub async fn trace(&self, path: &str) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(
+                req.method(Method::TRACE)
+                    .uri(path)
+                    .body(Body::default())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    pub async fn connect(&self, path: &str) -> Response<Body> {
+        let req = self.populate_headers(Request::builder());
+        self.app
+            .dispatch(
+                req.method(Method::CONNECT)
+                    .uri(path)
+                    .body(Body::default())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
     }
 }
