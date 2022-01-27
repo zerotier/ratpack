@@ -12,7 +12,7 @@ async fn validate_authtoken(
 ) -> HTTPResult<NoState> {
     let token = req.headers().get("X-AuthToken");
     if token.is_none() {
-        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
+        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED, String::new()));
     }
 
     let token = token.unwrap();
@@ -26,7 +26,7 @@ async fn validate_authtoken(
     };
 
     if !matches {
-        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED));
+        return Err(Error::StatusCode(StatusCode::UNAUTHORIZED, String::new()));
     }
 
     return Ok((req, resp, NoState {}));

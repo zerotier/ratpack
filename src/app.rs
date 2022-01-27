@@ -142,10 +142,10 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
     pub async fn dispatch(&self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
         match self.router.dispatch(req, self.clone()).await {
             Ok(resp) => Ok(resp),
-            Err(e) => match e {
-                Error::StatusCode(sc) => Ok(Response::builder()
+            Err(e) => match e.clone() {
+                Error::StatusCode(sc, msg) => Ok(Response::builder()
                     .status(sc)
-                    .body(Body::default())
+                    .body(Body::from(msg))
                     .unwrap()),
                 Error::InternalServerError(e) => Ok(Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -181,12 +181,13 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
     }
 }
 
-pub struct TestService<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> {
+#[derive(Clone)]
+pub struct TestApp<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> {
     app: App<S, T>,
     headers: Option<HeaderMap>,
 }
 
-impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> TestService<S, T> {
+impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> TestApp<S, T> {
     pub fn new(app: App<S, T>) -> Self {
         Self { app, headers: None }
     }

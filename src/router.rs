@@ -52,7 +52,10 @@ impl<S: Clone + Send, T: TransientState> Route<S, T> {
         let params = self.path.extract(provided)?;
 
         if self.method != req.method() {
-            return Err(Error::StatusCode(http::StatusCode::NOT_FOUND));
+            return Err(Error::StatusCode(
+                http::StatusCode::NOT_FOUND,
+                String::new(),
+            ));
         }
 
         self.handler.perform(req, None, params, app, state).await
@@ -85,14 +88,20 @@ impl<S: Clone + Send, T: TransientState + Clone + Send> Router<S, T> {
                     .dispatch(path.to_string(), req, app, T::initial())
                     .await?;
                 if response.is_none() {
-                    return Err(Error::StatusCode(http::StatusCode::INTERNAL_SERVER_ERROR));
+                    return Err(Error::StatusCode(
+                        http::StatusCode::INTERNAL_SERVER_ERROR,
+                        String::new(),
+                    ));
                 }
 
                 return Ok(response.unwrap());
             }
         }
 
-        Err(Error::StatusCode(http::StatusCode::NOT_FOUND))
+        Err(Error::StatusCode(
+            http::StatusCode::METHOD_NOT_ALLOWED,
+            String::new(),
+        ))
     }
 }
 

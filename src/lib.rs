@@ -35,7 +35,7 @@ where
 /// [http::Response] returns.
 #[derive(Clone, Debug)]
 pub enum Error {
-    StatusCode(http::StatusCode),
+    StatusCode(http::StatusCode, String),
     InternalServerError(String),
 }
 
@@ -54,9 +54,12 @@ impl Error {
         Self::InternalServerError(message.to_string())
     }
 
-    /// A convenient way to return status codes.
-    pub fn new_status(error: http::StatusCode) -> Self {
-        Self::StatusCode(error)
+    /// A convenient way to return status codes with optional informational bodies.
+    pub fn new_status<T>(error: http::StatusCode, message: T) -> Self
+    where
+        T: ToString,
+    {
+        Self::StatusCode(error, message.to_string())
     }
 }
 
@@ -67,6 +70,13 @@ where
     fn from(t: T) -> Self {
         Self::new(t.to_string())
     }
+}
+
+pub trait ToStatus
+where
+    Self: ToString,
+{
+    fn to_status(&self) -> Error;
 }
 
 /// HTTPResult is the return type for handlers. If a handler terminates at the end of its chain
@@ -111,7 +121,8 @@ impl TransientState for NoState {
 /// ```
 pub mod prelude {
     pub use crate::{
-        app::App, compose_handler, Error, HTTPResult, NoState, Params, ServerError, TransientState,
+        app::App, compose_handler, Error, HTTPResult, NoState, Params, ServerError, ToStatus,
+        TransientState,
     };
     pub use http::{Request, Response, StatusCode};
     pub use hyper::Body;
