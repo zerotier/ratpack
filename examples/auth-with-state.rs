@@ -34,7 +34,10 @@ async fn validate_authtoken(
         authstate.authed = Some(state.clone().lock().await.authtoken == token);
         Ok((req, resp, authstate))
     } else {
-        Err(Error::StatusCode(StatusCode::UNAUTHORIZED))
+        Err(Error::StatusCode(
+            StatusCode::UNAUTHORIZED,
+            String::default(),
+        ))
     }
 }
 
@@ -66,7 +69,10 @@ async fn hello(
         ));
     }
 
-    Err(Error::StatusCode(StatusCode::UNAUTHORIZED))
+    Err(Error::StatusCode(
+        StatusCode::UNAUTHORIZED,
+        String::default(),
+    ))
 }
 
 // Our global application state; must be `Clone`.
