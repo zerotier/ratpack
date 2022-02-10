@@ -181,6 +181,8 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
     }
 }
 
+/// TestApp is a testing framework for ratpack applications. Given an App, it can issue mock
+/// requests to it without standing up a typical web server.
 #[derive(Clone)]
 pub struct TestApp<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> {
     app: App<S, T>,
@@ -188,10 +190,13 @@ pub struct TestApp<S: Clone + Send + 'static, T: TransientState + 'static + Clon
 }
 
 impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> TestApp<S, T> {
+    /// Construct a new tested application.
     pub fn new(app: App<S, T>) -> Self {
         Self { app, headers: None }
     }
 
+    /// with_headers applies the headers to any following request, and acts as an alternative
+    /// constructor.
     pub fn with_headers(&self, headers: http::HeaderMap) -> Self {
         Self {
             app: self.app.clone(),
@@ -199,6 +204,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
         }
     }
 
+    /// dispatch a request to the application, this allows for maximum flexibility.
     pub async fn dispatch(&self, req: Request<Body>) -> Response<Body> {
         self.app.dispatch(req).await.unwrap()
     }
@@ -215,6 +221,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
         req
     }
 
+    /// Perform a GET request against the path.
     pub async fn get(&self, path: &str) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
 
@@ -224,6 +231,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a POST request against the path.
     pub async fn post(&self, path: &str, body: Body) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
 
@@ -233,6 +241,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a DELETE request against the path.
     pub async fn delete(&self, path: &str) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app
@@ -246,6 +255,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a PUT request against the path.
     pub async fn put(&self, path: &str, body: Body) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app
@@ -254,6 +264,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform an OPTIONS request against the path.
     pub async fn options(&self, path: &str) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app
@@ -267,6 +278,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a PATCH request against the path.
     pub async fn patch(&self, path: &str, body: Body) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app
@@ -275,6 +287,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a HEAD request against the path.
     pub async fn head(&self, path: &str) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app
@@ -288,6 +301,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a TRACE request against the path.
     pub async fn trace(&self, path: &str) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app
@@ -301,6 +315,7 @@ impl<S: Clone + Send + 'static, T: TransientState + 'static + Clone + Send> Test
             .unwrap()
     }
 
+    /// Perform a CONNECT request against the path.
     pub async fn connect(&self, path: &str) -> Response<Body> {
         let req = self.populate_headers(Request::builder());
         self.app

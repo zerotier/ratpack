@@ -1,4 +1,4 @@
-/// Application/Server-level management and routing configuration; outermost functionality.
+/// Application/Server-level management and routing configuration and testing support; outermost functionality.
 pub mod app;
 /// Handler construction and prototypes
 pub mod handler;
