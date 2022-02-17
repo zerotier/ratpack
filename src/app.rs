@@ -140,18 +140,45 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
     /// handler chain following the normal chain of responsibility rules described elsewhere. Only
     /// needed by server implementors.
     pub async fn dispatch(&self, req: Request<Body>) -> Result<Response<Body>, Infallible> {
+        let _uri = req.uri().clone();
+        let _method = req.method().clone();
+
+        #[cfg(feature = "logging")]
+        log::info!("{} request to {}", _method, _uri);
+
         match self.router.dispatch(req, self.clone()).await {
-            Ok(resp) => Ok(resp),
-            Err(e) => match e.clone() {
-                Error::StatusCode(sc, msg) => Ok(Response::builder()
-                    .status(sc)
-                    .body(Body::from(msg))
-                    .unwrap()),
-                Error::InternalServerError(e) => Ok(Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::from(e.to_string()))
-                    .unwrap()),
-            },
+            Ok(resp) => {
+                let _status = resp.status().clone();
+
+                #[cfg(feature = "logging")]
+                log::info!(
+                    "{} request to {}: responding with status {}",
+                    _method,
+                    _uri,
+                    _status,
+                );
+
+                Ok(resp)
+            }
+            Err(e) => {
+                #[cfg(feature = "logging")]
+                log::error!(
+                    "{} request to {}: responding with error {:?}",
+                    _method,
+                    _uri,
+                    e,
+                );
+                match e.clone() {
+                    Error::StatusCode(sc, msg) => Ok(Response::builder()
+                        .status(sc)
+                        .body(Body::from(msg))
+                        .unwrap()),
+                    Error::InternalServerError(e) => Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from(e.to_string()))
+                        .unwrap()),
+                }
+            }
         }
     }
 
@@ -167,13 +194,20 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 let s = s.clone();
                 async move { s.clone().dispatch(req).await }
             });
-            let (tcp_stream, _) = tcp_listener.accept().await?;
+            let (tcp_stream, _sa) = tcp_listener.accept().await?;
+
+            #[cfg(feature = "logging")]
+            log::trace!("Request from {}", _sa,);
+
             tokio::task::spawn(async move {
                 if let Err(http_err) = Http::new()
                     .http1_keep_alive(true)
                     .serve_connection(tcp_stream, sfn)
                     .await
                 {
+                    #[cfg(feature = "logging")]
+                    log::error!("Error while serving HTTP connection: {}", http_err);
+                    #[cfg(not(feature = "logging"))]
                     eprintln!("Error while serving HTTP connection: {}", http_err);
                 }
             });
@@ -182,6 +216,7 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
 
     /// Start a TLS-backed TCP/HTTP server with tokio. Performs dispatch on an as-needed basis. This is a more
     /// common path for users to start a server.
+    #[cfg(feature = "tls")]
     pub async fn serve_tls(
         self,
         addr: &str,
@@ -197,7 +232,9 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 let s = s.clone();
                 async move { s.clone().dispatch(req).await }
             });
-            let (tcp_stream, _) = tcp_listener.accept().await?;
+            let (tcp_stream, _sa) = tcp_listener.accept().await?;
+            #[cfg(feature = "logging")]
+            log::trace!("Request from {}", _sa,);
 
             let config = config.clone();
             tokio::task::spawn(async move {
@@ -208,11 +245,17 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                             .serve_connection(tcp_stream, sfn)
                             .await
                         {
+                            #[cfg(feature = "logging")]
+                            log::error!("Error while serving HTTP connection: {}", http_err);
+                            #[cfg(not(feature = "logging"))]
                             eprintln!("Error while serving HTTP connection: {}", http_err);
                         }
                     }
                     Err(e) => {
-                        eprintln!("Error while serving TLS: {}", e)
+                        #[cfg(feature = "logging")]
+                        log::error!("Error while serving TLS: {:?}", e);
+                        #[cfg(not(feature = "logging"))]
+                        eprintln!("Error while serving TLS: {:?}", e);
                     }
                 }
             });
