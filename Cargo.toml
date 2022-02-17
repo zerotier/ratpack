@@ -1,7 +1,7 @@
 [package]
 name = "ratpack"
-version = "0.1.1"
-edition = "2018"
+version = "0.1.2"
+edition = "2021"
 description = "ratpack is a HTTP framework designed around simplicity and ease-of-use"
 authors = ["Erik Hollensbe <erik.hollensbe@zerotier.com>", "Adam Ierymenko <adam.ierymenko@zerotier.com>"]
 license = "BSD-3-Clause"
@@ -13,6 +13,8 @@ hyper = { version = "^0.14", features = [ "http1", "http2", "server", "runtime",
 http = "^0.2"
 async-recursion = "^1"
 tokio = { version = "^1", features = [ "full" ] }
+tokio-rustls = "^0.23"
+webpki = "^0.22"
 
 [dev-dependencies]
 log = "^0.4"
