@@ -179,6 +179,45 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
             });
         }
     }
+
+    /// Start a TLS-backed TCP/HTTP server with tokio. Performs dispatch on an as-needed basis. This is a more
+    /// common path for users to start a server.
+    pub async fn serve_tls(
+        self,
+        addr: &str,
+        config: tokio_rustls::rustls::ServerConfig,
+    ) -> Result<(), ServerError> {
+        let socketaddr: SocketAddr = addr.parse()?;
+
+        let config = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+        let tcp_listener = TcpListener::bind(socketaddr).await?;
+        loop {
+            let s = self.clone();
+            let sfn = service_fn(move |req: Request<Body>| {
+                let s = s.clone();
+                async move { s.clone().dispatch(req).await }
+            });
+            let (tcp_stream, _) = tcp_listener.accept().await?;
+
+            let config = config.clone();
+            tokio::task::spawn(async move {
+                match config.accept(tcp_stream).await {
+                    Ok(tcp_stream) => {
+                        if let Err(http_err) = Http::new()
+                            .http1_keep_alive(true)
+                            .serve_connection(tcp_stream, sfn)
+                            .await
+                        {
+                            eprintln!("Error while serving HTTP connection: {}", http_err);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error while serving TLS: {}", e)
+                    }
+                }
+            });
+        }
+    }
 }
 
 /// TestApp is a testing framework for ratpack applications. Given an App, it can issue mock
