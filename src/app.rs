@@ -189,15 +189,18 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
 
         let tcp_listener = TcpListener::bind(socketaddr).await?;
         loop {
+            let (tcp_stream, sa) = tcp_listener.accept().await?;
+
             let s = self.clone();
-            let sfn = service_fn(move |req: Request<Body>| {
+            let sfn = service_fn(move |mut req: Request<Body>| {
+                let ip = sa.ip();
+                req.extensions_mut().insert(ip);
                 let s = s.clone();
                 async move { s.clone().dispatch(req).await }
             });
-            let (tcp_stream, _sa) = tcp_listener.accept().await?;
 
             #[cfg(feature = "logging")]
-            log::trace!("Request from {}", _sa,);
+            log::trace!("Request from {}", sa);
 
             tokio::task::spawn(async move {
                 if let Err(http_err) = Http::new()
@@ -227,14 +230,18 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
         let config = tokio_rustls::TlsAcceptor::from(Arc::new(config));
         let tcp_listener = TcpListener::bind(socketaddr).await?;
         loop {
+            let (tcp_stream, sa) = tcp_listener.accept().await?;
+
             let s = self.clone();
-            let sfn = service_fn(move |req: Request<Body>| {
+            let sfn = service_fn(move |mut req: Request<Body>| {
+                let ip = sa.ip();
+                req.extensions_mut().insert(ip);
                 let s = s.clone();
                 async move { s.clone().dispatch(req).await }
             });
-            let (tcp_stream, _sa) = tcp_listener.accept().await?;
+
             #[cfg(feature = "logging")]
-            log::trace!("Request from {}", _sa,);
+            log::trace!("Request from {}", sa);
 
             let config = config.clone();
             tokio::task::spawn(async move {
