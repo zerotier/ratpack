@@ -148,15 +148,26 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
         let _uri = req.uri().clone();
         let _method = req.method().clone();
 
-        #[cfg(feature = "logging")]
+        #[cfg(all(feature = "logging", not(feature = "trace")))]
         log::info!("{} request to {}", _method, _uri);
+
+        #[cfg(feature = "trace")]
+        tracing::info!("{} request to {}", _method, _uri);
 
         match self.router.dispatch(req, self.clone()).await {
             Ok(resp) => {
                 let _status = resp.status().clone();
 
-                #[cfg(feature = "logging")]
+                #[cfg(all(feature = "logging", not(feature = "trace")))]
                 log::info!(
+                    "{} request to {}: responding with status {}",
+                    _method,
+                    _uri,
+                    _status,
+                );
+
+                #[cfg(feature = "trace")]
+                tracing::info!(
                     "{} request to {}: responding with status {}",
                     _method,
                     _uri,
@@ -166,8 +177,16 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 Ok(resp)
             }
             Err(e) => {
-                #[cfg(feature = "logging")]
+                #[cfg(all(feature = "logging", not(feature = "trace")))]
                 log::error!(
+                    "{} request to {}: responding with error {:?}",
+                    _method,
+                    _uri,
+                    e,
+                );
+
+                #[cfg(feature = "trace")]
+                tracing::error!(
                     "{} request to {}: responding with error {:?}",
                     _method,
                     _uri,
@@ -207,7 +226,9 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 {
                     #[cfg(feature = "logging")]
                     log::error!("Error while serving HTTP connection: {}", http_err);
-                    #[cfg(not(feature = "logging"))]
+                    #[cfg(feature = "trace")]
+                    tracing::error!("Error while serving HTTP connection: {}", http_err);
+                    #[cfg(all(not(feature = "trace"), not(feature = "logging")))]
                     eprintln!("Error while serving HTTP connection: {}", http_err);
                 }
             });
@@ -231,8 +252,11 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 async move { s.clone().dispatch(req).await }
             });
 
-            #[cfg(feature = "logging")]
+            #[cfg(all(feature = "logging", not(feature = "trace")))]
             log::trace!("Request from {}", sa);
+
+            #[cfg(feature = "trace")]
+            tracing::trace!("Request from {}", sa);
 
             tokio::task::spawn(async move {
                 if let Err(http_err) = Http::new()
@@ -242,7 +266,9 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 {
                     #[cfg(feature = "logging")]
                     log::error!("Error while serving HTTP connection: {}", http_err);
-                    #[cfg(not(feature = "logging"))]
+                    #[cfg(feature = "trace")]
+                    tracing::error!("Error while serving HTTP connection: {}", http_err);
+                    #[cfg(all(not(feature = "trace"), not(feature = "logging")))]
                     eprintln!("Error while serving HTTP connection: {}", http_err);
                 }
             });
@@ -272,8 +298,11 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                 async move { s.clone().dispatch(req).await }
             });
 
-            #[cfg(feature = "logging")]
+            #[cfg(all(feature = "logging", not(feature = "trace")))]
             log::trace!("Request from {}", sa);
+
+            #[cfg(feature = "trace")]
+            tracing::trace!("Request from {}", sa);
 
             let config = config.clone();
             tokio::task::spawn(async move {
@@ -286,14 +315,18 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                         {
                             #[cfg(feature = "logging")]
                             log::error!("Error while serving HTTP connection: {}", http_err);
-                            #[cfg(not(feature = "logging"))]
+                            #[cfg(feature = "trace")]
+                            tracing::error!("Error while serving HTTP connection: {}", http_err);
+                            #[cfg(all(not(feature = "trace"), not(feature = "logging")))]
                             eprintln!("Error while serving HTTP connection: {}", http_err);
                         }
                     }
                     Err(e) => {
                         #[cfg(feature = "logging")]
                         log::error!("Error while serving TLS: {:?}", e);
-                        #[cfg(not(feature = "logging"))]
+                        #[cfg(feature = "trace")]
+                        tracing::error!("Error while serving TLS: {:?}", e);
+                        #[cfg(all(not(feature = "trace"), not(feature = "logging")))]
                         eprintln!("Error while serving TLS: {:?}", e);
                     }
                 }
