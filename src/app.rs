@@ -4,6 +4,11 @@ use http::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper::{server::conn::Http, service::service_fn, Body};
 use tokio::{net::TcpListener, sync::Mutex};
 
+#[cfg(feature = "unix")]
+use std::path::PathBuf;
+#[cfg(feature = "unix")]
+use tokio::net::UnixListener;
+
 use crate::{handler::Handler, router::Router, Error, ServerError, TransientState};
 
 /// App is used to define application-level functionality and initialize the server. Routes are
@@ -179,6 +184,33 @@ impl<S: 'static + Clone + Send, T: TransientState + 'static + Clone + Send> App<
                         .unwrap()),
                 }
             }
+        }
+    }
+
+    #[cfg(feature = "unix")]
+    pub async fn serve_unix(self, filename: PathBuf) -> Result<(), ServerError> {
+        let unix_listener = UnixListener::bind(filename)?;
+        loop {
+            let (stream, _) = unix_listener.accept().await?;
+
+            let s = self.clone();
+            let sfn = service_fn(move |req: Request<Body>| {
+                let s = s.clone();
+                async move { s.clone().dispatch(req).await }
+            });
+
+            tokio::task::spawn(async move {
+                if let Err(http_err) = Http::new()
+                    .http1_keep_alive(true)
+                    .serve_connection(stream, sfn)
+                    .await
+                {
+                    #[cfg(feature = "logging")]
+                    log::error!("Error while serving HTTP connection: {}", http_err);
+                    #[cfg(not(feature = "logging"))]
+                    eprintln!("Error while serving HTTP connection: {}", http_err);
+                }
+            });
         }
     }
 

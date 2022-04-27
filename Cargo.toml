@@ -25,3 +25,4 @@ env_logger = "^0.9"
 default = ["logging"]
 logging = ["log"]
 tls = ["tokio-rustls", "webpki"]
+unix = []
